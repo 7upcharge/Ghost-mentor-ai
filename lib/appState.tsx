@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useReducer, useCallback } from "react";
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from "react";
 
 // ═══════════════════════════════════════════
 // Types
@@ -35,12 +35,40 @@ export interface UserProfile {
   currentStruggle: string;
 }
 
+export interface FutureSelfMemoryProfile {
+  identity: {
+    ambition: "unknown" | "emerging" | "high";
+    coreFear: string;
+    decisionPattern: string;
+    emotionalStyle: string;
+  };
+  communicationStyle: {
+    tone: string;
+    sentenceRhythm: string;
+    vocabulary: string;
+  };
+  futureSelfEvolution: {
+    confidence: "unknown" | "fragile" | "improving" | "grounded";
+    discipline: "unknown" | "developing" | "consistent";
+    emotionalClarity: "unknown" | "emerging" | "high";
+  };
+  psychologicalContinuity: {
+    recurringThemes: string[];
+    recurringFears: string[];
+    behavioralLoops: string[];
+    growthPatterns: string[];
+    messageCount: number;
+    lastUpdatedAt: number | null;
+  };
+}
+
 export type Screen = "landing" | "onboarding" | "chat";
 
 export interface AppState {
   screen: Screen;
   user: UserProfile;
   messages: Message[];
+  memoryProfile: FutureSelfMemoryProfile;
   isThinking: boolean;
   onboardingStep: number;
 }
@@ -56,12 +84,45 @@ type Action =
   | { type: "SET_USER_ASPIRATION"; aspiration: string }
   | { type: "SET_USER_STRUGGLE"; struggle: string }
   | { type: "ADD_MESSAGE"; message: Message }
+  | { type: "SET_MEMORY_PROFILE"; memoryProfile: FutureSelfMemoryProfile }
+  | { type: "RESET_MEMORY_PROFILE" }
   | { type: "SET_THINKING"; isThinking: boolean }
   | { type: "UPDATE_LAST_GHOST_MESSAGE"; text: string; insightCard?: InsightCard | null; futureProjection?: FutureProjection | null };
 
 // ═══════════════════════════════════════════
 // Initial State
 // ═══════════════════════════════════════════
+
+const MEMORY_STORAGE_KEY = "ghost-mentor.future-self-memory";
+
+export function createEmptyFutureSelfMemoryProfile(): FutureSelfMemoryProfile {
+  return {
+    identity: {
+      ambition: "unknown",
+      coreFear: "not enough emotional history yet",
+      decisionPattern: "still being learned",
+      emotionalStyle: "still being learned",
+    },
+    communicationStyle: {
+      tone: "still being learned",
+      sentenceRhythm: "still being learned",
+      vocabulary: "still being learned",
+    },
+    futureSelfEvolution: {
+      confidence: "unknown",
+      discipline: "unknown",
+      emotionalClarity: "unknown",
+    },
+    psychologicalContinuity: {
+      recurringThemes: [],
+      recurringFears: [],
+      behavioralLoops: [],
+      growthPatterns: [],
+      messageCount: 0,
+      lastUpdatedAt: null,
+    },
+  };
+}
 
 const initialState: AppState = {
   screen: "landing",
@@ -71,6 +132,7 @@ const initialState: AppState = {
     currentStruggle: "",
   },
   messages: [],
+  memoryProfile: createEmptyFutureSelfMemoryProfile(),
   isThinking: false,
   onboardingStep: 0,
 };
@@ -96,6 +158,10 @@ function appReducer(state: AppState, action: Action): AppState {
       };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
+    case "SET_MEMORY_PROFILE":
+      return { ...state, memoryProfile: action.memoryProfile };
+    case "RESET_MEMORY_PROFILE":
+      return { ...state, memoryProfile: createEmptyFutureSelfMemoryProfile() };
     case "SET_THINKING":
       return { ...state, isThinking: action.isThinking };
     case "UPDATE_LAST_GHOST_MESSAGE": {
@@ -132,6 +198,31 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const storedMemory = window.localStorage.getItem(MEMORY_STORAGE_KEY);
+        if (!storedMemory) return;
+
+        dispatch({
+          type: "SET_MEMORY_PROFILE",
+          memoryProfile: {
+            ...createEmptyFutureSelfMemoryProfile(),
+            ...JSON.parse(storedMemory),
+          },
+        });
+      } catch {
+        window.localStorage.removeItem(MEMORY_STORAGE_KEY);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(state.memoryProfile));
+  }, [state.memoryProfile]);
 
   const goToScreen = useCallback(
     (screen: Screen) => dispatch({ type: "SET_SCREEN", screen }),

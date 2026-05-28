@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import type { UserProfile } from "@/lib/appState";
+import type { UserProfile, FutureSelfMemoryProfile } from "@/lib/appState";
 import { generateGhostResponse, MODEL_PIPELINE, type SimulationResponse } from "@/lib/simulationEngine";
 
 interface GhostRequest {
   user: UserProfile;
   message: string;
   historyCount: number;
+  memoryProfile?: FutureSelfMemoryProfile;
 }
 
 interface ProviderTextResponse {
@@ -28,9 +29,15 @@ export async function POST(request: Request) {
     user: body.user,
     message: body.message,
     historyCount: body.historyCount ?? 0,
+    memoryProfile: body.memoryProfile,
   };
 
-  const fallback = await generateGhostResponse(payload.user, payload.message, payload.historyCount);
+  const fallback = await generateGhostResponse(
+    payload.user,
+    payload.message,
+    payload.historyCount,
+    payload.memoryProfile
+  );
 
   try {
     const memory = await runGeminiMemory(payload, fallback);
@@ -67,6 +74,9 @@ User profile:
 Name: ${payload.user.name || "unknown"}
 Aspiration: ${payload.user.aspiration || "unknown"}
 Current struggle: ${payload.user.currentStruggle || "unknown"}
+
+Persistent future-self memory profile:
+${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
 
 Current message:
 ${payload.message}
@@ -108,6 +118,9 @@ emotional_insight, wiser_perspective, future_projection, practical_steps, closin
 
 Memory context:
 ${memoryContext}
+
+Persistent future-self memory profile:
+${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
 
 User message:
 ${payload.message}
@@ -176,6 +189,9 @@ ${memoryContext}
 
 Guidance plan:
 ${guidance}
+
+Persistent future-self memory profile:
+${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
 
 User message:
 ${payload.message}

@@ -19,19 +19,19 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: "Ghost Mentor AI — Your Future Self, Now",
   description:
-    "An autonomous AI life co-pilot that simulates your future self. Get emotionally intelligent, predictive, and brutally personalized mentorship from the person you could become.",
+    "An emotionally continuous future-self simulation that maintains a persistent profile of your patterns, fears, ambitions, and growth across sessions.",
   keywords: [
     "AI mentor",
     "future self",
-    "life coaching",
-    "AI advisor",
+    "emotional continuity",
+    "future-self memory",
     "personal growth",
     "decision support",
   ],
   openGraph: {
     title: "Ghost Mentor AI — Your Future Self, Now",
     description:
-      "What if your future self could guide your present decisions?",
+      "A future-self simulation with persistent emotional memory and psychological continuity.",
     type: "website",
   },
 };

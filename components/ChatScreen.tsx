@@ -385,6 +385,7 @@ export default function ChatScreen() {
             user: state.user,
             message: cleanedText,
             historyCount: state.messages.length,
+            memoryProfile: state.memoryProfile,
           }),
         });
 
@@ -394,8 +395,16 @@ export default function ChatScreen() {
         response = await generateGhostResponse(
           state.user,
           cleanedText,
-          state.messages.length
+          state.messages.length,
+          state.memoryProfile
         );
+      }
+
+      if (response.updatedMemoryProfile) {
+        dispatch({
+          type: "SET_MEMORY_PROFILE",
+          memoryProfile: response.updatedMemoryProfile,
+        });
       }
 
       for (let i = 0; i < steps.length; i++) {
@@ -434,7 +443,7 @@ export default function ChatScreen() {
         }
       }, 25);
     },
-    [state.user, state.messages.length, state.isThinking, isTypingGhost, dispatch, scrollToBottom]
+    [state.user, state.memoryProfile, state.messages.length, state.isThinking, isTypingGhost, dispatch, scrollToBottom]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
