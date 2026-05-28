@@ -2,11 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useDropzone } from "react-dropzone";
 import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
 import ProgressDots from "./ProgressDots";
 import { useApp } from "@/lib/appState";
 import { createFutureSelfMemoryProfileFromUserContext } from "@/lib/simulationEngine";
+import { parseFileClientSide, chunkAndTruncateText } from "@/lib/parsers";
 
 /* ═══════════════════════════════════════════
    Aspiration data
@@ -184,6 +186,43 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [calibrating, setCalibrating] = useState(false);
   const [selectedAspiration, setSelectedAspiration] = useState<string | null>(null);
   const [userContext, setUserContext] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
+    setIsParsing(true);
+    try {
+      const file = acceptedFiles[0];
+      const parsed = await parseFileClientSide(file);
+      
+      if (parsed.type === "pdf") {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/parse-pdf", { method: "POST", body: formData });
+        const data = await res.json();
+        if (data.text) {
+          setUserContext(prev => prev + (prev ? "\n\n" : "") + data.text);
+        }
+      } else {
+        setUserContext(prev => prev + (prev ? "\n\n" : "") + parsed.content);
+      }
+    } catch (e) {
+      console.error("Failed to parse file", e);
+    } finally {
+      setIsParsing(false);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    onDrop,
+    noClick: true,
+    accept: {
+      "text/plain": [".txt", ".md"],
+      "application/json": [".json"],
+      "application/pdf": [".pdf"]
+    },
+    maxFiles: 1
+  });
 
   const TOTAL_STEPS = 4;
   const name = state.user.name;
@@ -195,17 +234,45 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     (step === 2 && struggle.trim().length >= 5) ||
     step === 3; // context step is always skippable
 
-  const finishOnboarding = useCallback(() => {
-    // Extract memory profile from user context if provided
-    if (userContext.trim().length > 30) {
+  const finishOnboarding = useCallback(async () => {
+    setCalibrating(true);
+    const textToAnalyze = userContext.trim();
+
+    // Fallback to basic extraction if API fails or text is too short
+    const fallbackExtract = () => {
       const extractedProfile = createFutureSelfMemoryProfileFromUserContext(
-        userContext,
+        textToAnalyze,
         state.user
       );
       dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: extractedProfile });
+    };
+
+    if (textToAnalyze.length > 30) {
+      try {
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: chunkAndTruncateText(textToAnalyze),
+            user: state.user
+          }),
+        });
+        
+        if (!response.ok) throw new Error("API failed");
+        
+        const data = await response.json();
+        if (data && data.identity) {
+          dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: data });
+        } else {
+          fallbackExtract();
+        }
+      } catch (e) {
+        console.error("Extraction error:", e);
+        fallbackExtract();
+      }
     }
-    setCalibrating(true);
-    setTimeout(() => onComplete(), 5000);
+    
+    setTimeout(() => onComplete(), 1000);
   }, [userContext, state.user, dispatch, onComplete]);
 
   const nextStep = useCallback(() => {
@@ -532,19 +599,41 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.28 }}
                 >
-                  <textarea
-                    value={userContext}
-                    onChange={(e) => setUserContext(e.target.value)}
-                    placeholder={`Paste anything here — your ambitions, recurring fears, communication style, or a summary of who you are and what you're building…`}
-                    rows={5}
-                    autoFocus
-                    className={textareaClass}
-                    style={{ fontSize: "13.5px" }}
-                  />
-                  <p className="text-[10px] text-ghost-muted/35 mt-2">
+                  <div
+                    {...getRootProps()}
+                    className={`relative w-full rounded-2xl border-2 border-dashed transition-all duration-300 ${isDragActive ? "border-ghost-accent bg-ghost-accent/5" : "border-transparent"}`}
+                  >
+                    <input {...getInputProps()} />
+                    <textarea
+                      value={userContext}
+                      onChange={(e) => setUserContext(e.target.value)}
+                      placeholder={isParsing ? "Parsing file..." : `Paste text or drag & drop a file here (TXT, JSON, MD, PDF)…`}
+                      rows={5}
+                      autoFocus
+                      className={textareaClass}
+                      style={{ fontSize: "13.5px", position: "relative", zIndex: 10 }}
+                      onClick={e => e.stopPropagation()} // Prevent click to upload when clicking text area
+                    />
+                    
+                    {isDragActive && (
+                      <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-2xl">
+                        <p className="text-ghost-accent font-medium">Drop to import history</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-[10px] text-ghost-muted/35">
                     Optional — skip to begin with a blank memory profile
                   </p>
-                </motion.div>
+                  <button onClick={(e) => {
+                    e.preventDefault();
+                    open();
+                  }} className="text-[10px] text-ghost-accent/70 hover:text-ghost-accent transition-colors flex items-center gap-1 cursor-pointer">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload File
+                  </button>
+                </div>
               </StepCard>
             </motion.div>
           )}
