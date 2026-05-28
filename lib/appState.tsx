@@ -98,26 +98,43 @@ const MEMORY_STORAGE_KEY = "ghost-mentor.future-self-memory";
 export function createEmptyFutureSelfMemoryProfile(): FutureSelfMemoryProfile {
   return {
     identity: {
-      ambition: "unknown",
-      coreFear: "not enough emotional history yet",
-      decisionPattern: "still being learned",
-      emotionalStyle: "still being learned",
+      ambition: "high",
+      coreFear: "fear of wasting potential",
+      decisionPattern: "fast builder energy with a risk of overthinking before visible execution",
+      emotionalStyle: "future-oriented, reflective, achievement-driven",
     },
     communicationStyle: {
-      tone: "still being learned",
-      sentenceRhythm: "still being learned",
-      vocabulary: "still being learned",
+      tone: "direct, action-oriented, ambitious",
+      sentenceRhythm: "short, fast, iterative",
+      vocabulary: "startup-minded, systems-focused, emotionally intense",
     },
     futureSelfEvolution: {
-      confidence: "unknown",
+      confidence: "improving",
       discipline: "unknown",
-      emotionalClarity: "unknown",
+      emotionalClarity: "emerging",
     },
     psychologicalContinuity: {
-      recurringThemes: [],
-      recurringFears: [],
-      behavioralLoops: [],
-      growthPatterns: [],
+      recurringThemes: [
+        "becoming a more powerful future self",
+        "building high-impact AI systems",
+        "turning ambition into visible proof",
+        "identity transformation through projects",
+      ],
+      recurringFears: [
+        "fear of wasting potential",
+        "fear of slow progress",
+        "fear that scattered focus will dilute ambition",
+      ],
+      behavioralLoops: [
+        "intense excitement, rapid planning, then possible overwhelm",
+        "jumping from beginner foundations to advanced architecture",
+        "re-optimizing systems before finishing the current version",
+      ],
+      growthPatterns: [
+        "learning through building instead of passive theory",
+        "using checklists and milestones to convert imagination into execution",
+        "narrowing priorities to protect long-term momentum",
+      ],
       messageCount: 0,
       lastUpdatedAt: null,
     },
@@ -136,6 +153,48 @@ const initialState: AppState = {
   isThinking: false,
   onboardingStep: 0,
 };
+
+function mergeStoredFutureSelfMemoryProfile(storedMemory: unknown): FutureSelfMemoryProfile {
+  const seed = createEmptyFutureSelfMemoryProfile();
+
+  if (!storedMemory || typeof storedMemory !== "object") return seed;
+
+  const stored = storedMemory as Partial<FutureSelfMemoryProfile>;
+  const storedContinuity = stored.psychologicalContinuity;
+  const hasUserHistory =
+    typeof storedContinuity?.messageCount === "number" && storedContinuity.messageCount > 0;
+
+  return {
+    identity: {
+      ...seed.identity,
+      ...stored.identity,
+    },
+    communicationStyle: {
+      ...seed.communicationStyle,
+      ...stored.communicationStyle,
+    },
+    futureSelfEvolution: {
+      ...seed.futureSelfEvolution,
+      ...stored.futureSelfEvolution,
+    },
+    psychologicalContinuity: {
+      ...seed.psychologicalContinuity,
+      ...storedContinuity,
+      recurringThemes: hasUserHistory
+        ? storedContinuity?.recurringThemes ?? seed.psychologicalContinuity.recurringThemes
+        : seed.psychologicalContinuity.recurringThemes,
+      recurringFears: hasUserHistory
+        ? storedContinuity?.recurringFears ?? seed.psychologicalContinuity.recurringFears
+        : seed.psychologicalContinuity.recurringFears,
+      behavioralLoops: hasUserHistory
+        ? storedContinuity?.behavioralLoops ?? seed.psychologicalContinuity.behavioralLoops
+        : seed.psychologicalContinuity.behavioralLoops,
+      growthPatterns: hasUserHistory
+        ? storedContinuity?.growthPatterns ?? seed.psychologicalContinuity.growthPatterns
+        : seed.psychologicalContinuity.growthPatterns,
+    },
+  };
+}
 
 // ═══════════════════════════════════════════
 // Reducer
@@ -207,10 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         dispatch({
           type: "SET_MEMORY_PROFILE",
-          memoryProfile: {
-            ...createEmptyFutureSelfMemoryProfile(),
-            ...JSON.parse(storedMemory),
-          },
+          memoryProfile: mergeStoredFutureSelfMemoryProfile(JSON.parse(storedMemory)),
         });
       } catch {
         window.localStorage.removeItem(MEMORY_STORAGE_KEY);

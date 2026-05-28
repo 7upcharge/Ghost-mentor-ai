@@ -701,7 +701,7 @@ export default function ChatScreen() {
 
           {/* Privacy note */}
           <span className="text-[9.5px] text-center font-light tracking-wide" style={{ color: "rgba(255,255,255,0.18)" }}>
-            Your connection is secure and private
+            Memory stays in this browser to preserve continuity
           </span>
         </div>
       </div>
