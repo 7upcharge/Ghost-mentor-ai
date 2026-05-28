@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import GhostOrb from "./GhostOrb";
 import TypewriterText from "./TypewriterText";
 import GlowButton from "./GlowButton";
@@ -93,15 +93,19 @@ function DustLayer() {
   >([]);
 
   useEffect(() => {
-    setParticles(
-      Array.from({ length: 8 }, () => ({
-        x: 10 + Math.random() * 80,
-        y: 15 + Math.random() * 70,
-        dur: 18 + Math.random() * 16,
-        delay: Math.random() * 12,
-        size: 0.8 + Math.random() * 0.8,
-      }))
-    );
+    const timer = setTimeout(() => {
+      setParticles(
+        Array.from({ length: 8 }, () => ({
+          x: 10 + Math.random() * 80,
+          y: 15 + Math.random() * 70,
+          dur: 18 + Math.random() * 16,
+          delay: Math.random() * 12,
+          size: 0.8 + Math.random() * 0.8,
+        }))
+      );
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, []);
 
   return (

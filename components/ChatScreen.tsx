@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useApp, Message, InsightCard, FutureProjection } from "@/lib/appState";
+import { useApp, InsightCard, FutureProjection } from "@/lib/appState";
 import { generateInitialGreeting, generateGhostResponse, SimulationResponse } from "@/lib/simulationEngine";
 import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
@@ -266,6 +266,7 @@ export default function ChatScreen() {
 
   const activeGhostTextRef = useRef("");
   const greetingTriggeredRef = useRef(false);
+  const greetingSequenceActiveRef = useRef(false);
 
   const promptSeeds = [
     "Will I make it to where I want to be?",
@@ -286,6 +287,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (state.messages.length === 0 && !greetingTriggeredRef.current) {
       greetingTriggeredRef.current = true;
+      greetingSequenceActiveRef.current = true;
       dispatch({ type: "SET_THINKING", isThinking: true });
       const initGreeting = generateInitialGreeting(state.user);
       setThinkingSteps(initGreeting.thinkingSteps);
@@ -294,40 +296,46 @@ export default function ChatScreen() {
   }, [state.messages.length, state.user, dispatch]);
 
   useEffect(() => {
+    if (!greetingSequenceActiveRef.current) return;
+
     if (thinkingStepIndex >= 0 && thinkingStepIndex < thinkingSteps.length) {
       const timer = setTimeout(() => {
         setThinkingStepIndex((prev) => prev + 1);
       }, 1200);
       return () => clearTimeout(timer);
     } else if (thinkingStepIndex >= 0 && thinkingStepIndex === thinkingSteps.length) {
-      setThinkingStepIndex(-1);
-      dispatch({ type: "SET_THINKING", isThinking: false });
+      const timer = setTimeout(() => {
+        greetingSequenceActiveRef.current = false;
+        setThinkingStepIndex(-1);
+        dispatch({ type: "SET_THINKING", isThinking: false });
 
-      const initGreeting = generateInitialGreeting(state.user);
-      const id = "greeting-id";
-      dispatch({
-        type: "ADD_MESSAGE",
-        message: { id, role: "ghost", text: "", timestamp: Date.now() },
-      });
+        const initGreeting = generateInitialGreeting(state.user);
+        const id = "greeting-id";
+        dispatch({
+          type: "ADD_MESSAGE",
+          message: { id, role: "ghost", text: "", timestamp: Date.now() },
+        });
 
-      setIsTypingGhost(true);
-      let idx = 0;
-      activeGhostTextRef.current = "";
+        setIsTypingGhost(true);
+        let idx = 0;
+        activeGhostTextRef.current = "";
 
-      const interval = setInterval(() => {
-        if (idx <= initGreeting.text.length) {
-          activeGhostTextRef.current = initGreeting.text.slice(0, idx);
-          dispatch({
-            type: "UPDATE_LAST_GHOST_MESSAGE",
-            text: activeGhostTextRef.current,
-          });
-          idx += 2;
-        } else {
-          clearInterval(interval);
-          setIsTypingGhost(false);
-          scrollToBottom();
-        }
-      }, 15);
+        const interval = setInterval(() => {
+          if (idx <= initGreeting.text.length) {
+            activeGhostTextRef.current = initGreeting.text.slice(0, idx);
+            dispatch({
+              type: "UPDATE_LAST_GHOST_MESSAGE",
+              text: activeGhostTextRef.current,
+            });
+            idx += 2;
+          } else {
+            clearInterval(interval);
+            setIsTypingGhost(false);
+            scrollToBottom();
+          }
+        }, 15);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [thinkingStepIndex, thinkingSteps, state.user, dispatch, scrollToBottom]);
 
@@ -359,19 +367,36 @@ export default function ChatScreen() {
 
       dispatch({ type: "SET_THINKING", isThinking: true });
       const steps = [
-        "Accessing future memories...",
-        "Analyzing emotional resistance...",
-        "Simulating possible outcomes...",
-        "Constructing future-self guidance...",
+        "Reading the emotional pattern...",
+        "Tracing the possible timeline...",
+        "Choosing the honest next step...",
+        "Speaking from ten years ahead...",
       ];
       setThinkingSteps(steps);
       setThinkingStepIndex(0);
 
-      const response: SimulationResponse = await generateGhostResponse(
-        state.user,
-        cleanedText,
-        state.messages.length
-      );
+      let response: SimulationResponse;
+
+      try {
+        const apiResponse = await fetch("/api/ghost", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user: state.user,
+            message: cleanedText,
+            historyCount: state.messages.length,
+          }),
+        });
+
+        if (!apiResponse.ok) throw new Error("Ghost pipeline request failed.");
+        response = (await apiResponse.json()) as SimulationResponse;
+      } catch {
+        response = await generateGhostResponse(
+          state.user,
+          cleanedText,
+          state.messages.length
+        );
+      }
 
       for (let i = 0; i < steps.length; i++) {
         setThinkingStepIndex(i);

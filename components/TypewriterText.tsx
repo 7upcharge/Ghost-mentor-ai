@@ -30,12 +30,8 @@ export default function TypewriterText({
   const startTyping = useCallback(() => setStarted(true), []);
 
   useEffect(() => {
-    if (delay > 0) {
-      const timer = setTimeout(startTyping, delay);
-      return () => clearTimeout(timer);
-    } else {
-      setStarted(true);
-    }
+    const timer = setTimeout(startTyping, delay);
+    return () => clearTimeout(timer);
   }, [delay, startTyping]);
 
   useEffect(() => {

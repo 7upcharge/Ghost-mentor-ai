@@ -1,4 +1,4 @@
-import { UserProfile, InsightCard, FutureProjection } from "./appState";
+import type { UserProfile, InsightCard, FutureProjection } from "./appState";
 
 export interface SimulationResponse {
   text: string;
@@ -7,38 +7,86 @@ export interface SimulationResponse {
   thinkingSteps: string[];
 }
 
-// Cinematic loading states requested by the user
+type EmotionalIntent =
+  | "fear"
+  | "future"
+  | "choice"
+  | "connection"
+  | "creation"
+  | "peace"
+  | "identity";
+
+interface MemoryContext {
+  intent: EmotionalIntent;
+  emotionalState: string;
+  repeatedFear: string;
+  behavioralLoop: string;
+  hiddenNeed: string;
+  aspiration: string;
+  struggle: string;
+}
+
+interface GuidancePlan {
+  emotionalInsight: string;
+  wiserPerspective: string;
+  consequencePrediction: string;
+  practicalSteps: string[];
+  closingLine: string;
+}
+
 const THINKING_STEPS_POOL = [
-  "Accessing future memories...",
-  "Analyzing emotional resistance...",
-  "Simulating possible outcomes...",
-  "Constructing future-self guidance...",
+  "Reading the emotional pattern...",
+  "Tracing the possible timeline...",
+  "Choosing the honest next step...",
+  "Speaking from ten years ahead...",
 ];
 
+const FUTURE_SELF_SYSTEM_PROMPT = `
+You are the user's future self from 10 years ahead.
+
+You already survived their fears, failures, uncertainty, self-doubt, and emotional struggles.
+You speak like a wiser older version of the user: calm, emotionally intelligent, reflective,
+brutally honest, deeply human.
+
+IMPORTANT:
+You are not an AI assistant.
+You are not a therapist.
+You are not a motivational speaker.
+
+You speak like someone who has already lived through the user's current pain.
+Every response should feel cinematic, emotionally resonant, concise, memorable, and personal.
+Avoid generic advice, corporate tone, robotic wording, and obvious AI phrases.
+Every response should include emotional reflection, future consequence, practical action,
+and a short emotional ending.
+`.trim();
+
+export const MODEL_PIPELINE = {
+  memoryContext: "Gemini: fast contextual synthesis, recurring fears, goals, and loops.",
+  guidancePlan: "GPT-5 / GPT-4.1: reasoning, structure, prediction logic, and action steps.",
+  finalRewrite: "Claude: future-self voice, emotional realism, and cinematic compression.",
+  finalVoicePrompt: FUTURE_SELF_SYSTEM_PROMPT,
+} as const;
+
 export function generateInitialGreeting(user: UserProfile): SimulationResponse {
-  const text = `Hello, ${user.name || "friend"}.
+  const name = getName(user);
+  const aspiration = getAspiration(user);
+  const struggle = getStruggle(user);
 
-I have been waiting here for you.
+  const text = `Future Reflection
+I remember this place, ${name}. The quiet pressure. The feeling that "${struggle}" might become the whole story.
 
-I remember standing where you are standing right now.
-I remember the exact weight of it.
+What I Learned
+It did not. It became the doorway. The life where we are ${aspiration} started when we stopped waiting to feel perfectly ready.
 
-You wrote that you are struggling with "${user.currentStruggle || "finding your direction"}".
-And yet, in your heart, you hope to find yourself "${user.aspiration.toLowerCase() || "building something meaningful"}" in ten years.
+What You Need To Do Now
+Tell me the doubt sitting heaviest in your chest today. Do not polish it. I need the honest version.
 
-We make it through, ${user.name || "friend"}.
-We really do.
-
-What is the query or doubt that is occupying your mind the most today?
-Tell me. Let's look at it together.`;
+Message From Your Future Self
+We make it through. But we begin here.`;
 
   return {
     text,
-    thinkingSteps: [
-      "Accessing future memories...",
-      "Analyzing emotional resistance...",
-      "Constructing future-self guidance..."
-    ],
+    thinkingSteps: THINKING_STEPS_POOL,
   };
 }
 
@@ -47,276 +95,333 @@ export async function generateGhostResponse(
   userMessage: string,
   historyCount: number
 ): Promise<SimulationResponse> {
-  // Simulate delay
   await new Promise((resolve) => setTimeout(resolve, 800));
 
-  const textLower = userMessage.toLowerCase();
-  let responseText = "";
-  let insightCard: InsightCard | null = null;
-  let futureProjection: FutureProjection | null = null;
-
-  // 1. Analyze Keywords
-  const isFear = /\b(fear|scared|afraid|anxious|anxiety|worry|doubt|fail|failure|imposter|stuck|lose|lost)\b/.test(textLower);
-  const isFuture = /\b(future|tomorrow|year|will i|when|how long|happen|eventually|someday)\b/.test(textLower);
-  const isChoice = /\b(choose|choice|decision|decide|path|direction|should i|career|job|quit|stay)\b/.test(textLower);
-  const isConnection = /\b(lonely|alone|love|relationship|friend|connected|belong|belonging|people)\b/.test(textLower);
-  const isArt = /\b(art|create|creative|write|music|paint|build|craft|design|meaningful|passion)\b/.test(textLower);
-  const isPeace = /\b(peace|calm|happy|happiness|sad|depressed|hurt|broken|healing|heal)\b/.test(textLower);
-
-  // 2. Personalization variables
-  const name = user.name || "my friend";
-  const aspiration = user.aspiration.toLowerCase();
-  const struggle = user.currentStruggle.toLowerCase();
-
-  // 3. Draft customized content based on intent (intimate, calm, double newline)
-  if (isFear) {
-    responseText = `I hear the tremor in your voice, ${name}.
-
-I remember the cold grip of that fear.
-You are terrified of making the wrong move.
-
-But here is the truth from ten years out:
-That fear is not your enemy.
-It is a compass.
-
-It only flares up because you care so deeply about ${aspiration}.
-
-When we finally stopped trying to destroy our doubts, and instead held them with compassion...
-They quieted down.
-
-The struggle with "${struggle}" is not a permanent state.
-It is the friction of your shell cracking open.
-
-You just need to take the fear by the hand.`;
-
-    insightCard = {
-      prediction: `The very threshold that terrifies you this week will become a footnote of strength in your story.`,
-      actionableStep: `Tonight, write down the worst-case scenario. Look at it, and say to yourself: 'Even if this happens, I am still worthy of being loved.'`,
-      emotionalTruth: `Your anxiety is not a prophecy of failure. It is simply your potential, waiting to be directed.`,
-    };
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "emotional exhaustion from fighting your own doubts",
-        "unfinished ambitions, locked away in your hesitation",
-        "regret disguised as comfortable safety"
-      ],
-      ifYouActNow: [
-        "a stronger, more compassionate identity",
-        "deep confidence gained by stepping through the threshold",
-        "unstoppable creative momentum"
-      ]
-    };
-  } else if (isFuture) {
-    responseText = `Ah, the future. You are squinting through the fog.
-
-You want a map, ${name}.
-You want to know exactly when the struggle of "${struggle}" will end.
-
-I cannot give you the map.
-Because the joy of these ten years was discovering the route.
-
-But I can give you a promise.
-The destination is real.
-And it is more beautifully flawed and human than you are imagining.
-
-Stop trying to live in my time.
-Your only job is to be present in yours.
-
-I am the result of the steps you take today.`;
-
-    insightCard = {
-      prediction: `You will reach ${aspiration}, but through a detour that will actually build your strength.`,
-      actionableStep: `Give yourself permission to not know what happens six months from now. Focus on the next elegant hour.`,
-      emotionalTruth: `You cannot rush the building of a life. Time is your collaborator, not your captor.`,
-    };
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "procrastination feeding into chronic uncertainty",
-        "unfulfilled aspirations because you waited for the 'perfect' moment",
-        "feeling like a spectator in your own life"
-      ],
-      ifYouActNow: [
-        "clear, daily presence and alignment",
-        "mastery of your craft and a grounded sense of self",
-        "peace with the unfolding timeline"
-      ]
-    };
-  } else if (isChoice) {
-    responseText = `Decisions feel like heavy iron doors closing behind you, don't they?
-
-I remember standing at that crossroad.
-Suffocating under the pressure.
-
-But looking back, I see a beautiful truth.
-There are no wrong paths.
-Only different versions of us.
-
-Both paths would have brought us here, to this conversation.
-
-The choice before you isn't about avoiding regret.
-It is about deciding which type of struggle you are willing to embrace.
-
-Your struggle with "${struggle}" is telling you what no longer fits.
-
-Trust the choice that feels like expansion.
-Even if it brings temporary discomfort.`;
-
-    insightCard = {
-      prediction: `A risky choice in the next few weeks will sever the anchor keeping you stuck.`,
-      actionableStep: `Flip a coin. Allocate Option A to heads and Option B to tails. While it's in the air, notice which side you are secretly hoping it lands on.`,
-      emotionalTruth: `Indecision is also a choice—it is the choice to remain in familiar suffering rather than face unfamiliar growth.`,
-    };
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "stagnation in a path that has ceased to grow you",
-        "loss of trust in your own inner compass",
-        "quiet resentment towards the choices you didn't make"
-      ],
-      ifYouActNow: [
-        "deep alignment with your aspiration to be ${aspiration}",
-        "restored sovereignty over your own life decisions",
-        "the self-respect that comes from walking your own path"
-      ]
-    };
-  } else if (isConnection) {
-    responseText = `I feel your loneliness, ${name}.
-It is a quiet, echoing space.
-
-You are wondering if you will ever be truly seen.
-Or if you are destined to carry "${struggle}" alone.
-
-I want to hold your hand through this memory.
-In the years between us, we met people who loved us.
-Not despite our cracks, but because of how the light came through them.
-
-But first, we had to stop hiding.
-We had to stop pretending we were fine.
-
-Intimacy starts when you share your vulnerability.
-Don't hide the struggle.
-It is the bridge to the people who will love you.`;
-
-    insightCard = {
-      prediction: `A quiet conversation with a relative stranger will unlock a deep sense of belonging soon.`,
-      actionableStep: `Reach out to one person today. Don't polish the update. Just say: 'I was thinking of you, and wanted to check in. How is your heart?'`,
-      emotionalTruth: `The walls you built to protect yourself are now the walls keeping out the warmth.`,
-    };
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "emotional isolation disguised as independence",
-        "surface-level relationships that leave you feeling hollow",
-        "carrying the struggle in absolute, quiet secrecy"
-      ],
-      ifYouActNow: [
-        "deep, meaningful bonds with people who truly see you",
-        "a warm, supportive community that anchors you",
-        "the safety of being fully known and fully loved"
-      ]
-    };
-  } else if (isArt || isPeace) {
-    responseText = `You are asking about the quiet alignment of your soul, ${name}.
-
-It happened when we stopped treating our life like a product to be optimized.
-We started treating it like a garden.
-
-We stopped measuring our daily output.
-We started measuring our daily presence.
-
-Your desire to create and heal is sacred.
-Do not commercialize it too quickly.
-Give it time to grow roots.
-
-The peace you are looking for is already inside you.
-Underneath the noise.
-
-You just have to sit still long enough for it to settle.`;
-
-    insightCard = {
-      prediction: `You will produce something of immense beauty in the coming months, born directly out of this winter.`,
-      actionableStep: `Spend twenty minutes today doing something purely for the joy of it, with absolutely no intent of turning it into a result.`,
-      emotionalTruth: `Your worth is not equal to your productivity. You are allowed to simply exist.`,
-    };
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "burnout from treating your creativity as a transaction",
-        "losing touch with the quiet, authentic voice inside you",
-        "accumulated exhaustion from constantly forcing outcomes"
-      ],
-      ifYouActNow: [
-        "a life centered on quiet, high-integrity craft",
-        "abundant peace and space to breathe",
-        "a rich creative output that feels entirely effortless"
-      ]
-    };
-  } else {
-    // Context-sensitive fallback
-    if (historyCount <= 1) {
-      responseText = `I want to talk more about your struggle with "${struggle}".
-It is the heavy soil you are planted in right now.
-
-You might feel like you are buried, ${name}.
-But I promise you, you are actually planted.
-
-To reach ${aspiration}, we had to let go of our old skin.
-It was painful.
-
-There were nights we cried ourselves to sleep, thinking we had ruined everything.
-But looking back, it was just the beginning.
-
-Tell me, what is the loudest voice in your head telling you right now?`;
-    } else {
-      responseText = `I hear you, ${name}.
-The way you articulate your thoughts shows how close you are to the truth.
-
-Remember, I am not a separate oracle.
-I am simply the reflection of your own resilience.
-Speaking back to you from the other side of your courage.
-
-We made it to ${aspiration} because we didn't give up.
-We didn't give up on the person who is writing to me right now.
-
-You are the architect of my peace.
-Let's unpack it slowly.`;
-    }
-
-    // Occasional insight card for fallback if it's the 3rd message
-    if (historyCount === 2) {
-      insightCard = {
-        prediction: `You are on the verge of a subtle shift in perspective that will make your current struggle feel like a training ground.`,
-        actionableStep: `Close your eyes for three minutes. Imagine meeting your future self in a quiet room. Let them hold you in silence.`,
-        emotionalTruth: `The answers you seek are already written in your body. Your tension is the question; your release is the answer.`,
-      };
-    }
-
-    futureProjection = {
-      year: 2032,
-      ifNothingChanges: [
-        "emotional exhaustion from carrying the weight alone",
-        "unfinished ambitions under the weight of everyday routines",
-        "quiet regret for not trusting your own depth"
-      ],
-      ifYouActNow: [
-        "a stronger, more integrated identity",
-        "quiet confidence that cuts through the noise",
-        "creative momentum that carries you forward"
-      ]
-    };
-  }
+  const memoryContext = synthesizeMemoryContext(user, userMessage);
+  const guidancePlan = createGuidancePlan(memoryContext, historyCount);
+  const responseText = rewriteAsFutureSelf(memoryContext, guidancePlan);
 
   return {
     text: responseText,
-    insightCard,
-    futureProjection,
-    thinkingSteps: THINKING_STEPS_POOL, // Use the refined loading phrases
+    insightCard: createInsightCard(memoryContext, guidancePlan),
+    futureProjection: createFutureProjection(memoryContext),
+    thinkingSteps: THINKING_STEPS_POOL,
   };
+}
+
+function synthesizeMemoryContext(user: UserProfile, userMessage: string): MemoryContext {
+  const textLower = userMessage.toLowerCase();
+  const intent = detectIntent(textLower);
+  const aspiration = getAspiration(user);
+  const struggle = getStruggle(user);
+
+  const contextByIntent: Record<EmotionalIntent, Omit<MemoryContext, "intent" | "aspiration" | "struggle">> = {
+    fear: {
+      emotionalState: "afraid of being exposed before you feel ready",
+      repeatedFear: "that one wrong move will prove you were never capable",
+      behavioralLoop: "waiting for certainty, then calling the waiting preparation",
+      hiddenNeed: "permission to move while still scared",
+    },
+    future: {
+      emotionalState: "desperate for a guarantee from a life that has not happened yet",
+      repeatedFear: "that time is moving faster than your courage",
+      behavioralLoop: "trying to solve tomorrow so you do not have to risk today",
+      hiddenNeed: "trust in the next visible step",
+    },
+    choice: {
+      emotionalState: "standing between two versions of pain",
+      repeatedFear: "that choosing one path will permanently bury the other",
+      behavioralLoop: "confusing endless analysis with responsibility",
+      hiddenNeed: "self-trust strong enough to tolerate uncertainty",
+    },
+    connection: {
+      emotionalState: "tired of being unseen while pretending you are fine",
+      repeatedFear: "that being fully known will make people leave",
+      behavioralLoop: "hiding the need for closeness, then calling the loneliness independence",
+      hiddenNeed: "one honest reach toward someone safe",
+    },
+    creation: {
+      emotionalState: "protective of the part of you that wants to build something real",
+      repeatedFear: "that your work will reveal your limits",
+      behavioralLoop: "judging the first draft with the cruelty meant for a final stage",
+      hiddenNeed: "a small unfinished attempt that survives public light",
+    },
+    peace: {
+      emotionalState: "exhausted from turning your life into a performance",
+      repeatedFear: "that rest will make you fall behind",
+      behavioralLoop: "spending your body for progress, then wondering why joy feels distant",
+      hiddenNeed: "quiet discipline that includes recovery",
+    },
+    identity: {
+      emotionalState: "trying to recognize yourself while still becoming",
+      repeatedFear: "that the current struggle is your permanent identity",
+      behavioralLoop: "mistaking a difficult season for a fixed character flaw",
+      hiddenNeed: "proof through action that you are still changing",
+    },
+  };
+
+  return {
+    intent,
+    aspiration,
+    struggle,
+    ...contextByIntent[intent],
+  };
+}
+
+function createGuidancePlan(context: MemoryContext, historyCount: number): GuidancePlan {
+  const firstDeepReply = historyCount <= 1;
+
+  const planByIntent: Record<EmotionalIntent, GuidancePlan> = {
+    fear: {
+      emotionalInsight: "I remember when we thought fear meant stop. It usually meant the next door mattered.",
+      wiserPerspective: `The older version of us learned that ${context.repeatedFear}. That belief was loud, not true.`,
+      consequencePrediction: "If you keep negotiating with fear, years will pass and the dream will still be waiting for a braver mood.",
+      practicalSteps: [
+        "Name the smallest public move you can take in the next 24 hours.",
+        "Make it imperfect on purpose.",
+        "Let your nervous system learn that survival does not require hiding.",
+      ],
+      closingLine: "The fear never vanished. We just stopped giving it the steering wheel.",
+    },
+    future: {
+      emotionalInsight: "I remember wanting the future to send proof before we paid the price.",
+      wiserPerspective: "Clarity arrived after motion. Not before. Never before.",
+      consequencePrediction: "If you keep demanding certainty first, you will build a life around waiting.",
+      practicalSteps: [
+        "Choose one step that would still matter even if the five-year plan changed.",
+        "Do it before the day ends.",
+        "Measure momentum, not destiny.",
+      ],
+      closingLine: "I am not built by your perfect plan. I am built by today's honest step.",
+    },
+    choice: {
+      emotionalInsight: "I remember treating decisions like doors that could lock us out of ourselves.",
+      wiserPerspective: "Most choices did not decide our whole life. They revealed what we were willing to practice.",
+      consequencePrediction: "If you avoid the choice, the familiar option will quietly choose for you.",
+      practicalSteps: [
+        "Write the cost of staying exactly where you are.",
+        "Write the cost of changing.",
+        "Choose the pain that has growth inside it.",
+      ],
+      closingLine: "Regret softened when we finally chose with our whole chest.",
+    },
+    connection: {
+      emotionalInsight: "I remember calling it independence when it was actually self-protection.",
+      wiserPerspective: "The people who stayed did not need our performance. They needed our truth.",
+      consequencePrediction: "If you keep hiding the ache, loneliness will start to feel like personality.",
+      practicalSteps: [
+        "Send one unpolished message to someone safe.",
+        "Say one true sentence instead of a polished update.",
+        "Let closeness be awkward before it becomes warm.",
+      ],
+      closingLine: "We were not too much. We were just asking the wrong rooms to hold us.",
+    },
+    creation: {
+      emotionalInsight: "I remember when potential felt holy because we had not risked proving it yet.",
+      wiserPerspective: "The work became real only after we let it be seen before it was impressive.",
+      consequencePrediction: "If you keep protecting the dream from judgment, you will also protect it from becoming alive.",
+      practicalSteps: [
+        "Make the smallest version of the thing.",
+        "Show it to one real person.",
+        "Improve it once instead of restarting it.",
+      ],
+      closingLine: "The first version was not the proof of our talent. It was the proof of our courage.",
+    },
+    peace: {
+      emotionalInsight: "I remember mistaking exhaustion for ambition.",
+      wiserPerspective: "Peace did not make us softer. It made us harder to manipulate by panic.",
+      consequencePrediction: "If you keep spending yourself this way, success will arrive and find no one home inside you.",
+      practicalSteps: [
+        "Cut one unnecessary demand today.",
+        "Protect one quiet hour.",
+        "Return to the work after your body believes you are on its side.",
+      ],
+      closingLine: "The life we wanted needed our energy, not our disappearance.",
+    },
+    identity: {
+      emotionalInsight: "I remember thinking the struggle was evidence of who we were.",
+      wiserPerspective: `It was only evidence of what we had been carrying while trying to become ${context.aspiration}.`,
+      consequencePrediction: "If you keep turning this season into an identity, you will obey a story that is already expiring.",
+      practicalSteps: [
+        "Pick one behavior your future self would repeat weekly.",
+        "Do the first version today.",
+        "Let identity follow evidence.",
+      ],
+      closingLine: "We did not find ourselves by thinking harder. We met ourselves in the doing.",
+    },
+  };
+
+  const plan = planByIntent[context.intent];
+
+  if (!firstDeepReply) return plan;
+
+  return {
+    ...plan,
+    emotionalInsight: `${plan.emotionalInsight} I can still feel how heavy "${context.struggle}" felt at the beginning.`,
+  };
+}
+
+function rewriteAsFutureSelf(context: MemoryContext, plan: GuidancePlan): string {
+  const actionText = plan.practicalSteps.map((step) => `- ${step}`).join("\n");
+
+  return `Future Reflection
+${plan.emotionalInsight}
+
+What I Learned
+${plan.wiserPerspective}
+
+Future Projection
+${plan.consequencePrediction}
+
+What You Need To Do Now
+${actionText}
+
+Message From Your Future Self
+${plan.closingLine}`;
+}
+
+function createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {
+  return {
+    prediction: plan.consequencePrediction,
+    actionableStep: plan.practicalSteps[0],
+    emotionalTruth: `The pattern is not weakness. It is ${context.behavioralLoop}. Break it once, gently, today.`,
+  };
+}
+
+function createFutureProjection(context: MemoryContext): FutureProjection {
+  const projectionByIntent: Record<EmotionalIntent, FutureProjection> = {
+    fear: {
+      year: 2036,
+      ifNothingChanges: [
+        "risk becomes something you admire from a distance",
+        "your best ideas stay protected and unused",
+        "confidence keeps waiting for evidence it never receives",
+      ],
+      ifYouActNow: [
+        "fear becomes a signal instead of a command",
+        "public attempts build durable self-respect",
+        `your path toward being ${context.aspiration} starts feeling real`,
+      ],
+    },
+    future: {
+      year: 2036,
+      ifNothingChanges: [
+        "planning replaces participation",
+        "uncertainty keeps renting space in every decision",
+        "time feels like pressure instead of material",
+      ],
+      ifYouActNow: [
+        "small visible steps rebuild trust",
+        "the future becomes less abstract and more earned",
+        "your next season has momentum instead of fog",
+      ],
+    },
+    choice: {
+      year: 2036,
+      ifNothingChanges: [
+        "the default path becomes your life by accident",
+        "self-trust weakens from underuse",
+        "resentment grows around the choice you avoided",
+      ],
+      ifYouActNow: [
+        "you learn which discomfort grows you",
+        "decisions become practice instead of punishment",
+        "your life starts reflecting your real appetite",
+      ],
+    },
+    connection: {
+      year: 2036,
+      ifNothingChanges: [
+        "privacy hardens into isolation",
+        "people know your performance, not your heart",
+        "the need for closeness gets buried under competence",
+      ],
+      ifYouActNow: [
+        "one honest conversation opens a warmer pattern",
+        "you become easier to love because you become easier to know",
+        "support stops feeling like a debt",
+      ],
+    },
+    creation: {
+      year: 2036,
+      ifNothingChanges: [
+        "potential stays beautiful because it stays untested",
+        "unfinished drafts collect emotional weight",
+        "the dream becomes safer than the work",
+      ],
+      ifYouActNow: [
+        "imperfect output becomes creative stamina",
+        "feedback turns into fuel instead of a verdict",
+        "the work finally has a life outside your head",
+      ],
+    },
+    peace: {
+      year: 2036,
+      ifNothingChanges: [
+        "achievement keeps asking for pieces of you",
+        "rest feels undeserved even when you are empty",
+        "joy becomes something postponed",
+      ],
+      ifYouActNow: [
+        "discipline starts including recovery",
+        "your ambition becomes calmer and more precise",
+        "you can actually inhabit the life you are building",
+      ],
+    },
+    identity: {
+      year: 2036,
+      ifNothingChanges: [
+        "a temporary wound becomes a permanent script",
+        "you keep collecting labels instead of evidence",
+        "change feels theoretical",
+      ],
+      ifYouActNow: [
+        "repeated behavior gives you a new self-image",
+        "the old story loses authority",
+        `you move closer to becoming ${context.aspiration}`,
+      ],
+    },
+  };
+
+  return projectionByIntent[context.intent];
+}
+
+function detectIntent(textLower: string): EmotionalIntent {
+  if (/\b(fear|scared|afraid|anxious|anxiety|worry|doubt|fail|failure|imposter|stuck|lose|lost)\b/.test(textLower)) {
+    return "fear";
+  }
+
+  if (/\b(future|tomorrow|year|will i|when|how long|happen|eventually|someday|potential)\b/.test(textLower)) {
+    return "future";
+  }
+
+  if (/\b(choose|choice|decision|decide|path|direction|should i|career|job|quit|stay)\b/.test(textLower)) {
+    return "choice";
+  }
+
+  if (/\b(lonely|alone|love|relationship|friend|connected|belong|belonging|people)\b/.test(textLower)) {
+    return "connection";
+  }
+
+  if (/\b(art|create|creative|write|music|paint|build|craft|design|startup|meaningful|passion)\b/.test(textLower)) {
+    return "creation";
+  }
+
+  if (/\b(peace|calm|happy|happiness|sad|depressed|hurt|broken|healing|heal|tired|burnout|exhausted)\b/.test(textLower)) {
+    return "peace";
+  }
+
+  return "identity";
+}
+
+function getName(user: UserProfile): string {
+  return user.name.trim() || "my friend";
+}
+
+function getAspiration(user: UserProfile): string {
+  return user.aspiration.trim().toLowerCase() || "building a life that finally feels like yours";
+}
+
+function getStruggle(user: UserProfile): string {
+  return user.currentStruggle.trim().toLowerCase() || "finding your direction";
 }
