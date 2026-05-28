@@ -1,0 +1,676 @@
+"use client";
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { useApp, Message, InsightCard, FutureProjection } from "@/lib/appState";
+import { generateInitialGreeting, generateGhostResponse, SimulationResponse } from "@/lib/simulationEngine";
+import GhostOrb from "./GhostOrb";
+import GlowButton from "./GlowButton";
+
+// Film grain
+function GrainOverlay() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-0"
+      style={{
+        opacity: 0.032,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        backgroundRepeat: "repeat",
+        backgroundSize: "160px 160px",
+      }}
+    />
+  );
+}
+
+// Cinematic vignette
+function Vignette() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-0"
+      style={{
+        background:
+          "radial-gradient(ellipse 75% 65% at 50% 50%, transparent 35%, rgba(0,0,0,0.72) 100%)",
+      }}
+    />
+  );
+}
+
+// Ambient background motion
+function AmbientBackground() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+      <motion.div
+        className="absolute"
+        style={{
+          width: "80vw",
+          height: "50vw",
+          top: "-20vw",
+          left: "10vw",
+          background:
+            "radial-gradient(ellipse, rgba(139,108,246,0.07) 0%, rgba(100,74,210,0.025) 50%, transparent 70%)",
+          filter: "blur(60px)",
+        }}
+        animate={{ x: [-15, 15, -8, 12, -15], y: [0, -12, -5, -18, 0], scale: [1, 1.06, 0.97, 1.04, 1] }}
+        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
+
+// ── Insight Card
+function InsightCardView({ card }: { card: InsightCard }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+      className="mt-5 rounded-2xl overflow-hidden relative w-full"
+      style={{
+        background: "rgba(12, 12, 18, 0.85)",
+        border: "1px solid rgba(139, 108, 246, 0.15)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        boxShadow:
+          "0 0 48px rgba(139, 108, 246, 0.06), 0 20px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
+      {/* Accent header bar */}
+      <div
+        className="h-px w-full"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(139,108,246,0.5), transparent)",
+        }}
+      />
+
+      <div className="p-5 sm:p-6 flex flex-col gap-5">
+        {/* Prediction */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div
+              className="w-1 h-1 rounded-full"
+              style={{ background: "rgba(139,108,246,0.8)", boxShadow: "0 0 4px rgba(139,108,246,0.6)" }}
+            />
+            <span className="text-[9px] tracking-[0.22em] uppercase text-ghost-accent/65 font-semibold font-heading">
+              Future Prediction
+            </span>
+          </div>
+          <p className="text-[14px] sm:text-[15px] font-light text-ghost-text leading-relaxed">
+            {card.prediction}
+          </p>
+        </div>
+
+        <div className="h-px" style={{ background: "rgba(255,255,255,0.04)" }} />
+
+        {/* Actionable Step */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div
+              className="w-1 h-1 rounded-full"
+              style={{ background: "rgba(139,108,246,0.6)" }}
+            />
+            <span className="text-[9px] tracking-[0.22em] uppercase text-ghost-accent/65 font-semibold font-heading">
+              Immediate Ritual
+            </span>
+          </div>
+          <p className="text-[13.5px] font-light text-ghost-text-secondary leading-relaxed">
+            {card.actionableStep}
+          </p>
+        </div>
+
+        <div className="h-px" style={{ background: "rgba(255,255,255,0.04)" }} />
+
+        {/* Emotional Truth */}
+        <div className="relative pl-3.5 border-l border-ghost-accent/20">
+          <p className="text-[12.5px] font-light italic text-ghost-text-secondary/70 leading-relaxed">
+            &ldquo;{card.emotionalTruth}&rdquo;
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Future Projection Card — cinematic, screenshot-worthy
+function FutureProjectionView({ projection }: { projection: FutureProjection }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+      className="mt-5 rounded-2xl overflow-hidden w-full relative"
+      style={{
+        background: "linear-gradient(145deg, rgba(13,13,20,0.92) 0%, rgba(9,9,15,0.96) 100%)",
+        border: "1px solid rgba(255,255,255,0.055)",
+        backdropFilter: "blur(28px)",
+        WebkitBackdropFilter: "blur(28px)",
+        boxShadow: "0 32px 72px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
+      {/* Soft color washes */}
+      <div
+        className="absolute top-0 left-0 w-1/2 h-full pointer-events-none"
+        style={{ background: "radial-gradient(circle at 15% 25%, rgba(220,60,60,0.04), transparent 55%)" }}
+      />
+      <div
+        className="absolute top-0 right-0 w-1/2 h-full pointer-events-none"
+        style={{ background: "radial-gradient(circle at 85% 75%, rgba(139,108,246,0.07), transparent 55%)" }}
+      />
+
+      {/* Top accent line */}
+      <div
+        className="h-px w-full"
+        style={{
+          background: "linear-gradient(90deg, rgba(200,80,80,0.3), transparent 45%, transparent 55%, rgba(139,108,246,0.4))",
+        }}
+      />
+
+      <div className="p-5 sm:p-8 flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[9px] tracking-[0.28em] uppercase text-ghost-muted/70 font-bold font-heading">
+            Timeline Diagnostic
+          </span>
+          <h3 className="text-base sm:text-lg font-light text-ghost-text tracking-tight font-heading">
+            Future Projection{" "}
+            <span className="text-gradient-accent font-medium">— {projection.year}</span>
+          </h3>
+        </div>
+
+        {/* Pathways */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10 relative">
+
+          {/* Divider — desktop only */}
+          <div
+            className="absolute top-0 bottom-0 left-1/2 w-px hidden sm:block"
+            style={{
+              background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.04), transparent)",
+            }}
+          />
+
+          {/* Pathway A: If nothing changes */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: "rgba(239,68,68,0.5)" }}
+              />
+              <span className="text-[9px] tracking-[0.22em] uppercase text-red-400/60 font-semibold font-heading">
+                If nothing changes
+              </span>
+            </div>
+            <ul className="flex flex-col gap-3">
+              {projection.ifNothingChanges.map((item, idx) => (
+                <li
+                  key={idx}
+                  className="flex items-start gap-2.5 text-[13px] font-light text-ghost-text-secondary/65 leading-relaxed"
+                >
+                  <span className="text-red-400/40 mt-0.5 select-none text-[10px] font-heading shrink-0">→</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Pathway B: If you act now */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: "rgba(139,108,246,0.7)",
+                  boxShadow: "0 0 8px rgba(139,108,246,0.55)",
+                }}
+              />
+              <span className="text-[9px] tracking-[0.22em] uppercase text-ghost-accent-light/75 font-semibold font-heading">
+                If you act now
+              </span>
+            </div>
+            <ul className="flex flex-col gap-3">
+              {projection.ifYouActNow.map((item, idx) => (
+                <li
+                  key={idx}
+                  className="flex items-start gap-2.5 text-[13px] font-light text-ghost-text/88 leading-relaxed"
+                >
+                  <span className="text-ghost-accent-light/65 mt-0.5 select-none text-[10px] font-heading shrink-0">→</span>
+                  <span className="text-ghost-text/85 font-medium">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="text-[9.5px] text-right font-light tracking-wide"
+          style={{ color: "rgba(255,255,255,0.2)" }}
+        >
+          Hold this truth close · Your present creates your destiny
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+export default function ChatScreen() {
+  const { state, dispatch, goToScreen } = useApp();
+  const [inputText, setInputText] = useState("");
+  const [isTypingGhost, setIsTypingGhost] = useState(false);
+  const [thinkingStepIndex, setThinkingStepIndex] = useState(-1);
+  const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const activeGhostTextRef = useRef("");
+  const greetingTriggeredRef = useRef(false);
+
+  const promptSeeds = [
+    "Will I make it to where I want to be?",
+    "How do I deal with the anxiety of failure?",
+    "What step should I take tomorrow morning?",
+    "I'm feeling stuck in my current path.",
+  ];
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.messages.length === 0 && !greetingTriggeredRef.current) {
+      greetingTriggeredRef.current = true;
+      dispatch({ type: "SET_THINKING", isThinking: true });
+      const initGreeting = generateInitialGreeting(state.user);
+      setThinkingSteps(initGreeting.thinkingSteps);
+      setThinkingStepIndex(0);
+    }
+  }, [state.messages.length, state.user, dispatch]);
+
+  useEffect(() => {
+    if (thinkingStepIndex >= 0 && thinkingStepIndex < thinkingSteps.length) {
+      const timer = setTimeout(() => {
+        setThinkingStepIndex((prev) => prev + 1);
+      }, 1200);
+      return () => clearTimeout(timer);
+    } else if (thinkingStepIndex >= 0 && thinkingStepIndex === thinkingSteps.length) {
+      setThinkingStepIndex(-1);
+      dispatch({ type: "SET_THINKING", isThinking: false });
+
+      const initGreeting = generateInitialGreeting(state.user);
+      const id = "greeting-id";
+      dispatch({
+        type: "ADD_MESSAGE",
+        message: { id, role: "ghost", text: "", timestamp: Date.now() },
+      });
+
+      setIsTypingGhost(true);
+      let idx = 0;
+      activeGhostTextRef.current = "";
+
+      const interval = setInterval(() => {
+        if (idx <= initGreeting.text.length) {
+          activeGhostTextRef.current = initGreeting.text.slice(0, idx);
+          dispatch({
+            type: "UPDATE_LAST_GHOST_MESSAGE",
+            text: activeGhostTextRef.current,
+          });
+          idx += 2;
+        } else {
+          clearInterval(interval);
+          setIsTypingGhost(false);
+          scrollToBottom();
+        }
+      }, 15);
+    }
+  }, [thinkingStepIndex, thinkingSteps, state.user, dispatch, scrollToBottom]);
+
+  useEffect(() => {
+    scrollToBottom("smooth");
+  }, [state.messages.length, isTypingGhost, state.isThinking, scrollToBottom]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isTypingGhost) scrollToBottom("auto");
+    }, 150);
+    return () => clearInterval(timer);
+  }, [isTypingGhost, scrollToBottom]);
+
+  const handleSend = useCallback(
+    async (textToSend: string) => {
+      if (!textToSend.trim() || state.isThinking || isTypingGhost) return;
+
+      const cleanedText = textToSend.trim();
+      setInputText("");
+
+      const userMsgId = Math.random().toString();
+      dispatch({
+        type: "ADD_MESSAGE",
+        message: { id: userMsgId, role: "user", text: cleanedText, timestamp: Date.now() },
+      });
+
+      if (inputRef.current) inputRef.current.style.height = "auto";
+
+      dispatch({ type: "SET_THINKING", isThinking: true });
+      const steps = [
+        "Accessing future memories...",
+        "Analyzing emotional resistance...",
+        "Simulating possible outcomes...",
+        "Constructing future-self guidance...",
+      ];
+      setThinkingSteps(steps);
+      setThinkingStepIndex(0);
+
+      const response: SimulationResponse = await generateGhostResponse(
+        state.user,
+        cleanedText,
+        state.messages.length
+      );
+
+      for (let i = 0; i < steps.length; i++) {
+        setThinkingStepIndex(i);
+        await new Promise((resolve) => setTimeout(resolve, 1300));
+      }
+
+      setThinkingStepIndex(-1);
+      dispatch({ type: "SET_THINKING", isThinking: false });
+
+      const ghostMsgId = Math.random().toString();
+      dispatch({
+        type: "ADD_MESSAGE",
+        message: { id: ghostMsgId, role: "ghost", text: "", timestamp: Date.now() },
+      });
+
+      setIsTypingGhost(true);
+      let idx = 0;
+      activeGhostTextRef.current = "";
+
+      const interval = setInterval(() => {
+        if (idx <= response.text.length) {
+          activeGhostTextRef.current = response.text.slice(0, idx);
+          dispatch({ type: "UPDATE_LAST_GHOST_MESSAGE", text: activeGhostTextRef.current });
+          idx += 2;
+        } else {
+          clearInterval(interval);
+          dispatch({
+            type: "UPDATE_LAST_GHOST_MESSAGE",
+            text: response.text,
+            insightCard: response.insightCard,
+            futureProjection: response.futureProjection,
+          });
+          setIsTypingGhost(false);
+          scrollToBottom();
+        }
+      }, 25);
+    },
+    [state.user, state.messages.length, state.isThinking, isTypingGhost, dispatch, scrollToBottom]
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(inputText);
+    }
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  const handleReset = useCallback(() => {
+    goToScreen("landing");
+    dispatch({ type: "SET_SCREEN", screen: "landing" });
+    window.location.reload();
+  }, [goToScreen, dispatch]);
+
+  const activeThinkingStep = thinkingStepIndex >= 0 ? thinkingSteps[thinkingStepIndex] : null;
+  const isOrbPulsing = state.isThinking || isTypingGhost;
+
+  return (
+    <div className="relative flex flex-col h-screen overflow-hidden bg-ghost-bg select-none">
+      <GrainOverlay />
+      <Vignette />
+      <AmbientBackground />
+
+      {/* Header */}
+      <header className="absolute top-0 left-0 right-0 z-35 flex items-center justify-between px-6 sm:px-10 py-5">
+        {/* Wordmark */}
+        <motion.div
+          className="flex items-center gap-2.5"
+          whileHover={{ opacity: 0.8 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div
+            className="w-[20px] h-[20px] rounded-lg flex items-center justify-center"
+            style={{
+              background: "rgba(139, 108, 246, 0.12)",
+              border: "1px solid rgba(139,108,246,0.28)",
+              boxShadow: "0 0 10px rgba(139,108,246,0.14)",
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="3" fill="rgba(139,108,246,0.88)" />
+              <circle cx="6" cy="6" r="1.4" fill="white" fillOpacity="0.55" />
+            </svg>
+          </div>
+          <span
+            className="text-[13px] font-medium tracking-tight"
+            style={{ color: "rgba(240,240,244,0.82)", fontFamily: "var(--font-heading)" }}
+          >
+            Ghost Mentor
+          </span>
+        </motion.div>
+
+        {/* Reset */}
+        <motion.button
+          onClick={handleReset}
+          whileHover={{ opacity: 0.8 }}
+          className="text-[10px] font-medium tracking-wider uppercase text-ghost-muted hover:text-ghost-text-secondary transition-colors duration-200 cursor-pointer"
+        >
+          New Reflection
+        </motion.button>
+      </header>
+
+      {/* Floating Orb Zone */}
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-2.5">
+        <GhostOrb size="md" animate isThinking={isOrbPulsing} />
+
+        {/* Thinking label */}
+        <AnimatePresence mode="wait">
+          {state.isThinking && (
+            <motion.div
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -3 }}
+              transition={{ duration: 0.35 }}
+              className="flex items-center gap-2"
+            >
+              <span className="text-[9px] tracking-[0.22em] uppercase text-ghost-accent/65 font-semibold font-heading">
+                {activeThinkingStep || "Accessing timeline..."}
+              </span>
+              <div className="flex gap-[3px] items-center">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Messages */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 pt-56 pb-48 z-10 scroll-smooth relative"
+        style={{
+          WebkitMaskImage:
+            "linear-gradient(to bottom, transparent 0%, black 14%, black 84%, transparent 100%)",
+          maskImage:
+            "linear-gradient(to bottom, transparent 0%, black 14%, black 84%, transparent 100%)",
+        }}
+      >
+        <div className="w-full max-w-[640px] mx-auto flex flex-col gap-12">
+          <AnimatePresence initial={false}>
+            {state.messages.map((message, i) => {
+              const isGhost = message.role === "ghost";
+              const isLastMessage = i === state.messages.length - 1;
+
+              return (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 14, filter: "blur(3px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                  className={`flex flex-col ${isGhost ? "items-start" : "items-end"} w-full`}
+                >
+                  {/* Sender label */}
+                  <span className="text-[8.5px] tracking-[0.25em] uppercase text-ghost-muted/55 mb-2.5 font-semibold font-heading px-1">
+                    {isGhost ? "Future Self" : "Present Self"}
+                  </span>
+
+                  {/* Message bubble */}
+                  {isGhost ? (
+                    <div
+                      className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[14.5px] max-w-[94%] sm:max-w-[84%] whitespace-pre-wrap select-text"
+                      style={{
+                        background: "rgba(15, 15, 22, 0.72)",
+                        backdropFilter: "blur(16px)",
+                        WebkitBackdropFilter: "blur(16px)",
+                        border: "1px solid rgba(255,255,255,0.065)",
+                        padding: "16px 20px",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
+                      }}
+                    >
+                      {message.text}
+                      {isGhost && isLastMessage && isTypingGhost && (
+                        <span
+                          className="inline-block w-[1.5px] h-[1em] align-middle ml-[3px] bg-ghost-accent translate-y-[-0.05em]"
+                          style={{ animation: "cursor-blink 1s step-end infinite" }}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <p
+                      className="text-[14px] font-light leading-relaxed text-right max-w-[88%] sm:max-w-[72%] whitespace-pre-wrap select-text"
+                      style={{ color: "rgba(157,157,170,0.85)" }}
+                    >
+                      {message.text}
+                    </p>
+                  )}
+
+                  {/* Insight card */}
+                  {isGhost && !isTypingGhost && message.insightCard && (
+                    <div className="w-full max-w-[94%] sm:max-w-[84%]">
+                      <InsightCardView card={message.insightCard} />
+                    </div>
+                  )}
+
+                  {/* Future projection */}
+                  {isGhost && !isTypingGhost && message.futureProjection && (
+                    <div className="w-full max-w-[94%] sm:max-w-[84%]">
+                      <FutureProjectionView projection={message.futureProjection} />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input Panel */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center px-4 py-6 pointer-events-none"
+        style={{
+          background: "linear-gradient(to top, rgba(7,7,10,0.98) 0%, rgba(7,7,10,0.92) 60%, transparent 100%)",
+        }}
+      >
+        <div className="w-full max-w-[640px] flex flex-col gap-3.5 pointer-events-auto">
+          {/* Prompt seeds */}
+          <AnimatePresence>
+            {state.messages.length <= 1 && !state.isThinking && !isTypingGhost && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                transition={{ duration: 0.55, delay: 1.0 }}
+                className="flex flex-wrap gap-1.5 justify-center"
+              >
+                {promptSeeds.map((seed) => (
+                  <motion.button
+                    key={seed}
+                    whileHover={{ y: -1, borderColor: "rgba(255,255,255,0.12)" }}
+                    transition={{ duration: 0.18 }}
+                    onClick={() => {
+                      setInputText(seed);
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                        setTimeout(() => handleSend(seed), 100);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-full text-[11.5px] font-light cursor-pointer text-center transition-colors duration-200"
+                    style={{
+                      color: "rgba(157,157,170,0.65)",
+                      border: "1px solid rgba(255,255,255,0.055)",
+                      background: "rgba(15,15,20,0.4)",
+                    }}
+                  >
+                    {seed}
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Text input */}
+          <div
+            className="glass-input relative flex items-center w-full rounded-2xl"
+            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}
+          >
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={inputText}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Share what is in your heart..."
+              className="flex-1 bg-transparent py-4 pl-5 pr-14 font-light text-[14px] sm:text-[15px] outline-none resize-none max-h-32 leading-relaxed"
+              style={{
+                color: "rgba(240,240,244,0.9)",
+                caretColor: "rgba(139,108,246,0.9)",
+              }}
+              disabled={state.isThinking || isTypingGhost}
+            />
+            <div className="absolute right-3 bottom-2.5">
+              <GlowButton
+                onClick={() => handleSend(inputText)}
+                disabled={!inputText.trim() || state.isThinking || isTypingGhost}
+                className="w-9 h-9 !p-0 rounded-xl"
+                size="default"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              </GlowButton>
+            </div>
+          </div>
+
+          {/* Privacy note */}
+          <span className="text-[9.5px] text-center font-light tracking-wide" style={{ color: "rgba(255,255,255,0.18)" }}>
+            Your connection is secure and private
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
