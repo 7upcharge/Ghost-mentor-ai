@@ -88,16 +88,25 @@ export const MODEL_PIPELINE = {
   finalVoicePrompt: FUTURE_SELF_SYSTEM_PROMPT,
 } as const;
 
-export function generateInitialGreeting(user: UserProfile): SimulationResponse {
+export function generateInitialGreeting(
+  user: UserProfile,
+  memoryProfile?: FutureSelfMemoryProfile
+): SimulationResponse {
   const name = getName(user);
   const aspiration = getAspiration(user);
   const struggle = getStruggle(user);
+  const continuity = normalizeMemoryProfile(memoryProfile);
+  const knownFear = continuity.psychologicalContinuity.recurringFears[0] || continuity.identity.coreFear;
+  const knownLoop = continuity.psychologicalContinuity.behavioralLoops[0] || continuity.identity.decisionPattern;
+  const knowsUser = continuity.psychologicalContinuity.messageCount > 0;
 
   const text = `Future Reflection
 I remember this place, ${name}. The quiet pressure. The feeling that "${struggle}" might become the whole story.
+${knowsUser ? `I also remember the older pattern underneath it: ${knownFear}.` : "I do not know your full pattern yet, but I am listening closely."}
 
 What I Learned
 It did not. It became the doorway. The life where we are ${aspiration} started when we stopped waiting to feel perfectly ready.
+${knowsUser ? `The loop we had to outgrow was this: ${knownLoop}.` : "The clearer you are with me, the more accurately I become your future self."}
 
 What You Need To Do Now
 Tell me the doubt sitting heaviest in your chest today. Do not polish it. I need the honest version.
@@ -158,6 +167,67 @@ export function createInitialFutureSelfMemoryProfile(): FutureSelfMemoryProfile 
       growthPatterns: [],
       messageCount: 0,
       lastUpdatedAt: null,
+    },
+  };
+}
+
+export function createFutureSelfMemoryProfileFromUserContext(
+  rawContext: string,
+  user: UserProfile
+): FutureSelfMemoryProfile {
+  const text = rawContext.trim();
+  const textLower = text.toLowerCase();
+
+  if (!text) return createInitialFutureSelfMemoryProfile();
+
+  const recurringThemes = compactUnique([
+    ...extractMatchingThemes(textLower),
+    user.aspiration ? `future identity: ${user.aspiration.toLowerCase()}` : "",
+    "becoming the future self through repeated action",
+  ]);
+  const recurringFears = compactUnique([
+    extractFear(textLower),
+    textLower.includes("potential") ? "fear of wasting potential" : "",
+    textLower.includes("failure") || textLower.includes("fail") ? "fear of failure becoming public" : "",
+    textLower.includes("average") ? "fear of becoming average" : "",
+  ]);
+  const behavioralLoops = compactUnique([
+    extractDecisionPattern(textLower),
+    textLower.includes("burst") || textLower.includes("waves") ? "intense bursts of motivation followed by possible overwhelm" : "",
+    textLower.includes("fragment") || textLower.includes("too many") ? "too many active directions competing for focus" : "",
+    textLower.includes("optimize") || textLower.includes("re-optimize") ? "re-optimizing systems before finishing the current version" : "",
+  ]);
+  const growthPatterns = compactUnique([
+    textLower.includes("build") || textLower.includes("project") ? "learns fastest through building real projects" : "",
+    textLower.includes("checklist") || textLower.includes("roadmap") || textLower.includes("plan") ? "uses structure and milestones to create momentum" : "",
+    textLower.includes("iterate") || textLower.includes("refine") ? "improves through fast iteration and refinement" : "",
+    "turning ambition into visible proof",
+  ]);
+
+  return {
+    identity: {
+      ambition: inferUserContextAmbition(textLower),
+      coreFear: recurringFears[0] || "not enough emotional history yet",
+      decisionPattern: behavioralLoops[0] || "still being learned",
+      emotionalStyle: inferUserContextEmotionalStyle(textLower),
+    },
+    communicationStyle: {
+      tone: inferUserContextTone(textLower),
+      sentenceRhythm: inferSentenceRhythm(text),
+      vocabulary: inferVocabulary(textLower),
+    },
+    futureSelfEvolution: {
+      confidence: textLower.includes("confident") ? "grounded" : "improving",
+      discipline: textLower.includes("consistent") || textLower.includes("discipline") ? "developing" : "unknown",
+      emotionalClarity: text.length > 240 ? "high" : "emerging",
+    },
+    psychologicalContinuity: {
+      recurringThemes,
+      recurringFears,
+      behavioralLoops,
+      growthPatterns,
+      messageCount: 1,
+      lastUpdatedAt: Date.now(),
     },
   };
 }
@@ -534,6 +604,83 @@ function normalizeMemoryProfile(memoryProfile?: FutureSelfMemoryProfile): Future
 
 function appendUnique(items: string[], nextItem: string): string[] {
   return [nextItem, ...items.filter((item) => item !== nextItem)].slice(0, 6);
+}
+
+function compactUnique(items: string[]): string[] {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))].slice(0, 6);
+}
+
+function extractMatchingThemes(textLower: string): string[] {
+  const themes: string[] = [];
+
+  if (/\b(ai|agent|automation|future-self|future self|memory|system)\b/.test(textLower)) {
+    themes.push("building AI systems with emotional continuity");
+  }
+
+  if (/\b(startup|founder|company|hackathon|mvp|product)\b/.test(textLower)) {
+    themes.push("startup-style building and visible execution");
+  }
+
+  if (/\b(gym|fitness|body|fat loss|transformation)\b/.test(textLower)) {
+    themes.push("physical and identity transformation");
+  }
+
+  if (/\b(video|editing|content|poster|creative|design)\b/.test(textLower)) {
+    themes.push("creative output and visual identity");
+  }
+
+  return themes;
+}
+
+function extractFear(textLower: string): string {
+  if (textLower.includes("wasting potential")) return "fear of wasting potential";
+  if (textLower.includes("public failure")) return "fear of public failure";
+  if (textLower.includes("not enough") || textLower.includes("doing enough")) return "fear of not doing enough";
+  if (textLower.includes("stuck")) return "fear of staying stuck";
+  if (textLower.includes("average")) return "fear of becoming average";
+  return "";
+}
+
+function extractDecisionPattern(textLower: string): string {
+  if (textLower.includes("overthink")) return "overthinks before acting";
+  if (textLower.includes("fast") && textLower.includes("iterate")) return "moves through fast iteration and constant refinement";
+  if (textLower.includes("burst") || textLower.includes("waves")) return "works in intense bursts of momentum";
+  if (textLower.includes("jump") || textLower.includes("advanced")) return "jumps quickly from foundations into advanced architecture";
+  return "";
+}
+
+function inferUserContextAmbition(textLower: string): FutureSelfMemoryProfile["identity"]["ambition"] {
+  if (/\b(high ambition|ambitious|startup|founder|company|impact|powerful|not average|respected)\b/.test(textLower)) {
+    return "high";
+  }
+
+  if (/\b(goal|build|create|future|improve)\b/.test(textLower)) return "emerging";
+
+  return "unknown";
+}
+
+function inferUserContextEmotionalStyle(textLower: string): string {
+  if (/\b(reflective|analytical|systems|patterns|future)\b/.test(textLower)) {
+    return "reflective, analytical, future-oriented";
+  }
+
+  if (/\b(intense|urgent|pressure|potential)\b/.test(textLower)) {
+    return "intense, future-oriented, achievement-driven";
+  }
+
+  return "still being learned";
+}
+
+function inferUserContextTone(textLower: string): string {
+  if (/\b(direct|fast|action|checklist|roadmap|steps)\b/.test(textLower)) {
+    return "direct, action-oriented, practical";
+  }
+
+  if (/\b(introspective|reflective|emotional)\b/.test(textLower)) {
+    return "introspective and emotionally expressive";
+  }
+
+  return "still being learned";
 }
 
 function themeForIntent(intent: EmotionalIntent): string {

@@ -6,6 +6,7 @@ import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
 import ProgressDots from "./ProgressDots";
 import { useApp } from "@/lib/appState";
+import { createFutureSelfMemoryProfileFromUserContext } from "@/lib/simulationEngine";
 
 /* ═══════════════════════════════════════════
    Aspiration data
@@ -77,8 +78,8 @@ function CalibratingScreen() {
   const messages = [
     "Reading your timeline…",
     "Mapping emotional patterns…",
+    "Building your future-self memory…",
     "Calibrating your Ghost Mentor…",
-    "Almost there…",
   ];
 
   return (
@@ -92,7 +93,7 @@ function CalibratingScreen() {
       <GhostOrb size="md" isThinking />
 
       {/* Message sequence */}
-      <div className="flex flex-col items-center gap-2 min-h-[72px]">
+      <div className="relative flex flex-col items-center gap-2 min-h-[72px]">
         {messages.map((msg, i) => (
           <motion.p
             key={msg}
@@ -166,7 +167,11 @@ function StepLabel({ current, total }: { current: number; total: number }) {
 }
 
 /* ═══════════════════════════════════════════
-   Main Onboarding
+   Main Onboarding — 4 steps
+   0: Name
+   1: Aspiration
+   2: Struggle
+   3: Context calibration (optional — can skip)
    ═══════════════════════════════════════════ */
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -178,28 +183,43 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [direction, setDirection] = useState(1);
   const [calibrating, setCalibrating] = useState(false);
   const [selectedAspiration, setSelectedAspiration] = useState<string | null>(null);
+  const [userContext, setUserContext] = useState("");
 
+  const TOTAL_STEPS = 4;
   const name = state.user.name;
   const struggle = state.user.currentStruggle;
 
   const canAdvance =
     (step === 0 && name.trim().length >= 1) ||
     (step === 1 && selectedAspiration !== null) ||
-    (step === 2 && struggle.trim().length >= 5);
+    (step === 2 && struggle.trim().length >= 5) ||
+    step === 3; // context step is always skippable
+
+  const finishOnboarding = useCallback(() => {
+    // Extract memory profile from user context if provided
+    if (userContext.trim().length > 30) {
+      const extractedProfile = createFutureSelfMemoryProfileFromUserContext(
+        userContext,
+        state.user
+      );
+      dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: extractedProfile });
+    }
+    setCalibrating(true);
+    setTimeout(() => onComplete(), 5000);
+  }, [userContext, state.user, dispatch, onComplete]);
 
   const nextStep = useCallback(() => {
     if (step === 1 && selectedAspiration) {
       const asp = aspirations.find((a) => a.id === selectedAspiration);
       if (asp) dispatch({ type: "SET_USER_ASPIRATION", aspiration: asp.label });
     }
-    if (step < 2) {
+    if (step < TOTAL_STEPS - 1) {
       setDirection(1);
       setStep((s) => s + 1);
     } else {
-      setCalibrating(true);
-      setTimeout(() => onComplete(), 5000);
+      finishOnboarding();
     }
-  }, [step, selectedAspiration, dispatch, onComplete]);
+  }, [step, selectedAspiration, dispatch, finishOnboarding]);
 
   const prevStep = useCallback(() => {
     if (step > 0) {
@@ -236,11 +256,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         transition={{ delay: 0.35 }}
         className="mb-8"
       >
-        <ProgressDots total={3} current={step} />
+        <ProgressDots total={TOTAL_STEPS} current={step} />
       </motion.div>
 
       {/* Step cards */}
-      <div className="relative w-full max-w-[440px]" style={{ minHeight: 340 }}>
+      <div className="relative w-full max-w-[440px]" style={{ minHeight: 360 }}>
         <AnimatePresence mode="wait" custom={direction}>
 
           {/* Step 0 — Name */}
@@ -256,7 +276,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-0"
             >
               <StepCard>
-                <StepLabel current={1} total={3} />
+                <StepLabel current={1} total={TOTAL_STEPS} />
                 <motion.h2
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -311,7 +331,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-0"
             >
               <StepCard>
-                <StepLabel current={2} total={3} />
+                <StepLabel current={2} total={TOTAL_STEPS} />
                 <motion.h2
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -401,7 +421,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               className="absolute inset-0"
             >
               <StepCard>
-                <StepLabel current={3} total={3} />
+                <StepLabel current={3} total={TOTAL_STEPS} />
                 <motion.h2
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -450,6 +470,84 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </StepCard>
             </motion.div>
           )}
+
+          {/* Step 3 — Context calibration (optional) */}
+          {step === 3 && (
+            <motion.div
+              key="step-context"
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.28, ease: [0.32, 0, 0.67, 0] }}
+              className="absolute inset-0"
+            >
+              <StepCard>
+                <StepLabel current={4} total={TOTAL_STEPS} />
+                <motion.h2
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                  className="text-headline mb-1.5"
+                >
+                  Help your future self
+                  <br />
+                  <span className="text-gradient-accent">know you deeper.</span>
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.18 }}
+                  className="text-[13px] text-ghost-text-secondary mb-4 font-light leading-relaxed"
+                >
+                  Paste a short self-description, your goals, fears, or even a summary of your
+                  chat history. The more context, the more accurate your future self becomes.
+                </motion.p>
+
+                {/* What to paste — hints */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.22 }}
+                  className="flex flex-wrap gap-1.5 mb-4"
+                >
+                  {["My goals", "My fears", "My personality", "Chat history summary"].map((hint) => (
+                    <span
+                      key={hint}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-light"
+                      style={{
+                        color: "rgba(139,108,246,0.7)",
+                        border: "1px solid rgba(139,108,246,0.18)",
+                        background: "rgba(139,108,246,0.05)",
+                      }}
+                    >
+                      {hint}
+                    </span>
+                  ))}
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.28 }}
+                >
+                  <textarea
+                    value={userContext}
+                    onChange={(e) => setUserContext(e.target.value)}
+                    placeholder={`Paste anything here — your ambitions, recurring fears, communication style, or a summary of who you are and what you're building…`}
+                    rows={5}
+                    autoFocus
+                    className={textareaClass}
+                    style={{ fontSize: "13.5px" }}
+                  />
+                  <p className="text-[10px] text-ghost-muted/35 mt-2">
+                    Optional — skip to begin with a blank memory profile
+                  </p>
+                </motion.div>
+              </StepCard>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -480,7 +578,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         </AnimatePresence>
 
         <GlowButton onClick={nextStep} size="lg" disabled={!canAdvance}>
-          {step === 2 ? "Begin Session" : "Continue"}
+          {step === TOTAL_STEPS - 1
+            ? userContext.trim().length > 30
+              ? "Calibrate My Future Self"
+              : "Begin Session"
+            : "Continue"}
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14" />
             <path d="m12 5 7 7-7 7" />
