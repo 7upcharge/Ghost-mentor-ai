@@ -137,7 +137,7 @@ function buildSystemPrompt(
     : "";
 
   const memoryBlock = chatSummary
-    ? `\nLAST SESSION:\n${chatSummary}\nReference naturally if relevant.`
+    ? `\nLAST SESSION: ${chatSummary}\nReference this naturally if relevant.`
     : "";
 
   return `You are not an AI. You are not a coach. You are not a therapist.

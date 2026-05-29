@@ -1,24 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
-// Prompt 8: 3-sentence summary using gemini-2.0-flash
-const GEMINI_FLASH_MODEL = "gemini-2.0-flash";
-
-// ── Prompt 8 system prompt ───────────────────────────────────────────────────
-const SYSTEM_PROMPT = `
-You are an expert psychological patterns compiler for a future-self AI mentor.
-Analyze the chat log between Present Self (User) and Future Self (Ghost Mentor) and write exactly 3 sentences.
-
-Sentence 1: The core emotional truth or recurring fear surfaced in this session.
-Sentence 2: The realization or perspective shift that happened (or didn't happen).
-Sentence 3: One specific behavioral pattern or action the person committed to (or avoided committing to).
-
-Rules:
-- Write in first-person plural: "We discussed...", "We realized...", "Our pattern was..."
-- Max 3 sentences. Dense and authentic. No filler.
-- Do NOT sound like an AI assistant. Sound like a future-self remembering.
-- No generic summaries. Only what actually happened in this specific conversation.
-`.trim();
+const OPENROUTER_MODEL = "google/gemini-2.5-pro-exp";
 
 export async function POST(request: Request) {
   try {
@@ -32,13 +15,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ summary: "" });
     }
 
-    const apiKey =
-      process.env.GOOGLE_AI_STUDIO_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY;
-
+    const apiKey = process.env.OPENROUTER_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "No Gemini API key configured." }, { status: 500 });
+      return NextResponse.json({ error: "No OpenRouter API key configured." }, { status: 500 });
     }
 
     // Format chat log
@@ -49,32 +28,40 @@ export async function POST(request: Request) {
       })
       .join("\n\n");
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: chatLog }] }],
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 200,
-          },
-        }),
-      }
-    );
+    const prompt = `Summarize this conversation in 3 sentences.
+What emotional topic came up.
+What shifted for the user if anything.
+Any new pattern noticed.
+Tone: memory-like, not clinical.
+Conversation: ${chatLog}`;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://ghost-mentor-ai.vercel.app",
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 300,
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini Session Memory Error:", errorText);
-      throw new Error("Failed to summarize session with Gemini Flash.");
+      console.error("OpenRouter Session Memory Error:", errorText);
+      throw new Error("Failed to summarize session with OpenRouter.");
     }
 
     const data = await response.json();
-    const summary = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    const summary = data?.choices?.[0]?.message?.content?.trim() || "";
 
-    // Save to Supabase — write to both chat_summary (new) and last_session_summary (compat)
+    // Save to Supabase — write to both chat_summary and legacy last_session_summary
     if (
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -86,6 +73,7 @@ export async function POST(request: Request) {
             user_id: userId,
             chat_summary: summary,
             last_session_summary: summary,
+            last_active: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id" }
