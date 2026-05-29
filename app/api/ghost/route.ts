@@ -32,6 +32,48 @@ const OPENROUTER_PRIMARY_MODEL = "google/gemini-2.5-pro-exp";
 // Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-r1";
 
+function detectFirstMessageLanguage(text: string): "hindi" | "english" | "hinglish" {
+  const textLower = text.toLowerCase();
+  
+  // Devanagari script check
+  const HINDI_REGEX = /[\u0900-\u097F]/;
+  const hindiCharCount = (text.match(HINDI_REGEX) || []).length;
+  if (hindiCharCount > 0 && hindiCharCount / text.length > 0.15) {
+    return "hindi";
+  }
+
+  // Hinglish markers
+  const HINGLISH_MARKERS = [
+    "kya", "bhai", "nahi", "karna", "hai", "haan", "acha",
+    "yaar", "matlab", "kaise", "kyun", "mujhe", "toh",
+    "abhi", "bahut", "theek", "sahi", "bro", "kar",
+    "bol", "chal", "dekh", "samajh", "pata", "wala",
+    "mein", "ka", "ki", "ke", "se", "par", "pe",
+    "kuch", "aur", "lekin", "phir", "jab", "tab",
+    "agar", "isliye", "woh", "yeh", "mere", "tera",
+    "uska", "apna", "sab", "log", "banda", "scene",
+    "jugaad", "chalta", "funda", "fundoo", "bakwas",
+    "bilkul", "accha", "raha", "rahi", "hota", "hoti",
+    "karo", "karta", "karti", "lena", "dena", "jana",
+    "aana", "rehna", "lagta", "lagti", "bata", "bolo",
+  ];
+
+  const words = textLower.split(/\s+/);
+  let hinglishMatches = 0;
+  for (const w of words) {
+    const cleanWord = w.replace(/[^a-z]/g, "");
+    if (HINGLISH_MARKERS.includes(cleanWord)) {
+      hinglishMatches++;
+    }
+  }
+
+  if (hinglishMatches > 0 || (words.length > 0 && hinglishMatches / words.length > 0.1)) {
+    return "hinglish";
+  }
+
+  return "english";
+}
+
 function buildAboutMeResponse(profile?: FutureSelfMemoryProfile): string {
   const fallbackMsg = `Tu planning mein rehta hai. 
 Implementation se bhaagta hai.
@@ -202,6 +244,31 @@ export async function POST(request: Request) {
     }
   }
 
+  // ── Language Auto-Detection ───────────────────────────────────────────────
+  let currentLangProfile = payload.languageProfile;
+  const detectedLang = detectFirstMessageLanguage(payload.message);
+
+  if (!currentLangProfile || !currentLangProfile.dominantLanguage) {
+    currentLangProfile = {
+      dominantLanguage: detectedLang,
+      sentenceLength: "medium",
+      formality: "casual",
+      commonSlang: [],
+      frustrationStyle: "still being learned",
+      excitementStyle: "still being learned",
+    };
+  } else {
+    const currentDominant = currentLangProfile.dominantLanguage;
+    if (detectedLang !== currentDominant) {
+      currentLangProfile = {
+        ...currentLangProfile,
+        dominantLanguage: detectedLang,
+      };
+    }
+  }
+
+  payload.languageProfile = currentLangProfile;
+
   // ── Build system prompt ───────────────────────────────────────────────────
   let systemPrompt = MODEL_PIPELINE.buildSystemPrompt(
     payload.user,
@@ -238,6 +305,7 @@ export async function POST(request: Request) {
       futureProjection: null,
       confusionDetected: false,
       providerTrace: ["local"],
+      languageProfile: currentLangProfile,
     });
   }
 
@@ -265,6 +333,7 @@ export async function POST(request: Request) {
         futureProjection: null,
         confusionDetected: false,
         providerTrace: ["gemini-primary"],
+        languageProfile: currentLangProfile,
       });
     } catch (err) {
       console.error("Future projection intercept failed:", err);
@@ -285,6 +354,7 @@ export async function POST(request: Request) {
       futureProjection: null,
       confusionDetected: currentIsConfusion,
       providerTrace: [geminiResult.provider],
+      languageProfile: currentLangProfile,
     });
   } catch (primaryError) {
     console.warn("OpenRouter Gemini primary failed, trying OpenRouter DeepSeek fallback…", primaryError);
@@ -301,6 +371,7 @@ export async function POST(request: Request) {
       futureProjection: null,
       confusionDetected: currentIsConfusion,
       providerTrace: [deepseekResult.provider],
+      languageProfile: currentLangProfile,
     });
   } catch (fallbackError) {
     console.error("OpenRouter fallback also failed, using local static template.", fallbackError);
@@ -314,6 +385,7 @@ export async function POST(request: Request) {
     futureProjection: null,
     confusionDetected: currentIsConfusion,
     providerTrace: ["local"],
+    languageProfile: currentLangProfile,
   });
 }
 

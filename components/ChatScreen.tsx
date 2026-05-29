@@ -447,6 +447,13 @@ export default function ChatScreen() {
         });
       }
 
+      if ((response as any).languageProfile) {
+        dispatch({
+          type: "SET_LANGUAGE_PROFILE",
+          languageProfile: (response as any).languageProfile,
+        });
+      }
+
       // Track confusion count
       const isConfused = isConfusionMessage(cleanedText);
       const nextConfusionCount = isConfused ? confusionCount + 1 : 0;
