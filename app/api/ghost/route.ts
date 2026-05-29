@@ -30,7 +30,7 @@ interface ProviderTextResponse {
 const GEMINI_PRIMARY_MODEL = "gemini-2.5-pro";
 
 // Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
-const OPENROUTER_MODEL = "deepseek/deepseek-r1";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-r1";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GhostRequest>;
