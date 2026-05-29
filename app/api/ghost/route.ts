@@ -26,8 +26,8 @@ interface ProviderTextResponse {
 }
 
 // ── Model constants ──────────────────────────────────────────────────────────
-// Primary: Gemini 2.5 Pro via Google AI Studio key (Prompt Pack spec)
-const GEMINI_PRIMARY_MODEL = "gemini-2.5-pro";
+// Primary: Gemini 2.5 Pro Exp via OpenRouter
+const OPENROUTER_PRIMARY_MODEL = "google/gemini-2.5-pro-exp";
 
 // Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-r1";
@@ -99,10 +99,10 @@ export async function POST(request: Request) {
   console.log("USER MESSAGE:", payload.message);
   console.log("CALLING MODEL...");
 
-  // ── Primary: Gemini 2.5 Pro via Google AI Studio ──────────────────────────
+  // ── Primary: Gemini 2.5 Pro Exp via OpenRouter ────────────────────────────
   try {
-    const geminiResult = await callGeminiPrimary(payload, systemPrompt);
-    console.log("MODEL RESPONSE (Gemini):", geminiResult.text);
+    const geminiResult = await callOpenRouterPrimary(payload, systemPrompt);
+    console.log("MODEL RESPONSE (Gemini Primary via OpenRouter):", geminiResult.text);
     return NextResponse.json({
       ...fallback,
       text: geminiResult.text,
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
       providerTrace: [geminiResult.provider],
     });
   } catch (primaryError) {
-    console.warn("Gemini primary failed, trying OpenRouter DeepSeek fallback…", primaryError);
+    console.warn("OpenRouter Gemini primary failed, trying OpenRouter DeepSeek fallback…", primaryError);
   }
 
   // ── Fallback: DeepSeek-R1-Free via OpenRouter ─────────────────────────────
@@ -144,99 +144,93 @@ export async function POST(request: Request) {
 
 function cleanMessageHistory(messages: any[], currentMessage: string) {
   if (!messages || messages.length === 0) {
-    return [{ role: "user", parts: [{ text: currentMessage }] }];
+    return [{ role: "user", content: currentMessage }];
   }
 
-  // 1. Map roles to user/model, drop empty text
+  // 1. Map roles to user/assistant, drop empty text
   const mapped = messages
     .map((m: any) => ({
-      role: m.role === "ghost" ? "model" : "user",
-      text: m.text ? m.text.trim() : ""
+      role: m.role === "ghost" ? "assistant" as const : "user" as const,
+      content: m.text ? m.text.trim() : "",
     }))
-    .filter((m: any) => m.text !== "");
+    .filter((m: any) => m.content !== "");
 
-  // 2. Filter out leading model messages (Gemini requires first message to be user)
+  // 2. Filter out leading assistant messages (some APIs prefer starting with user)
   let firstUserIdx = mapped.findIndex((m: any) => m.role === "user");
   if (firstUserIdx === -1) {
-    return [{ role: "user", parts: [{ text: currentMessage }] }];
+    return [{ role: "user", content: currentMessage }];
   }
   const sliced = mapped.slice(firstUserIdx);
 
   // 3. Merge consecutive messages with the same role
-  const alternating: any[] = [];
+  const alternating: { role: "user" | "assistant"; content: string }[] = [];
   for (const m of sliced) {
     if (alternating.length === 0) {
-      alternating.push({ role: m.role, parts: [{ text: m.text }] });
+      alternating.push({ role: m.role, content: m.content });
     } else {
       const last = alternating[alternating.length - 1];
       if (last.role === m.role) {
-        last.parts[0].text += "\n" + m.text;
+        last.content += "\n" + m.content;
       } else {
-        alternating.push({ role: m.role, parts: [{ text: m.text }] });
+        alternating.push({ role: m.role, content: m.content });
       }
+    }
+  }
+
+  // 4. Ensure the last message is from user and contains/ends with currentMessage
+  const last = alternating[alternating.length - 1];
+  if (!last || last.role !== "user") {
+    alternating.push({ role: "user", content: currentMessage });
+  } else {
+    if (last.content !== currentMessage && !last.content.endsWith(currentMessage)) {
+      alternating.push({ role: "user", content: currentMessage });
     }
   }
 
   return alternating;
 }
 
-// ── Gemini 2.5 Pro via Google AI Studio ─────────────────────────────────────
-async function callGeminiPrimary(
+// ── Primary: Gemini 2.5 Pro Exp via OpenRouter ─────────────────────────────
+async function callOpenRouterPrimary(
   payload: GhostRequest,
   systemPrompt: string
 ): Promise<ProviderTextResponse> {
-  // Support both key names from .env.local
-  const apiKey =
-    process.env.GOOGLE_AI_STUDIO_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.OPENROUTER_KEY;
+  if (!apiKey) throw new Error("No OpenRouter key configured.");
 
-  if (!apiKey) throw new Error("No Google AI Studio key configured.");
+  const conversationHistory = cleanMessageHistory(payload.messages ?? [], payload.message);
 
-  const runWithModel = async (model: string) => {
-    const contents = cleanMessageHistory(payload.messages ?? [], payload.message);
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://ghost-mentor.ai",
+      "X-Title": "Ghost Mentor AI",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_PRIMARY_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...conversationHistory,
+      ],
+      max_tokens: 650,
+      temperature: 0.75,
+    }),
+  });
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents,
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            temperature: 0.75,
-            maxOutputTokens: 650,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Gemini ${model} error: ${err.slice(0, 200)}`);
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text !== "string" || !text.trim()) {
-      throw new Error(`Empty response from Gemini ${model}.`);
-    }
-    return text.trim();
-  };
-
-  try {
-    const text = await runWithModel(GEMINI_PRIMARY_MODEL);
-    return { text, provider: "gemini-primary" };
-  } catch (err) {
-    console.warn(`Failed to call ${GEMINI_PRIMARY_MODEL}, trying gemini-2.5-flash fallback...`, err);
-    try {
-      const text = await runWithModel("gemini-2.5-flash");
-      return { text, provider: "gemini-primary" };
-    } catch (fallbackErr) {
-      throw new Error(`Gemini primary failed. Pro error: ${(err as Error).message}. Flash error: ${(fallbackErr as Error).message}`);
-    }
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter Gemini Primary error: ${err.slice(0, 200)}`);
   }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Empty response from OpenRouter Gemini Primary.");
+  }
+
+  return { text: text.trim(), provider: "gemini-primary" };
 }
 
 // ── DeepSeek-R1-Free via OpenRouter ─────────────────────────────────────────
