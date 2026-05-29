@@ -205,8 +205,7 @@ async function callOpenRouterPrimary(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://ghost-mentor.ai",
-      "X-Title": "Ghost Mentor AI",
+      "HTTP-Referer": "https://ghost-mentor-ai.vercel.app",
     },
     body: JSON.stringify({
       model: OPENROUTER_PRIMARY_MODEL,
@@ -214,8 +213,8 @@ async function callOpenRouterPrimary(
         { role: "system", content: systemPrompt },
         ...conversationHistory,
       ],
-      max_tokens: 650,
-      temperature: 0.75,
+      max_tokens: 300,
+      temperature: 0.85,
     }),
   });
 

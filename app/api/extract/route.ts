@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-// Support both key name conventions
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || "gemini-2.5-pro";
+const OPENROUTER_MODEL = "google/gemini-2.5-pro-exp";
 
 // ── Prompt 3 — exact JSON profile structure ──────────────────────────────────
 const SYSTEM_PROMPT = `
@@ -66,14 +64,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No text provided for extraction." }, { status: 400 });
     }
 
-    // Support both key name conventions from .env.local
-    const apiKey =
-      process.env.GOOGLE_AI_STUDIO_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY;
-
+    const apiKey = process.env.OPENROUTER_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "No Gemini API key configured." }, { status: 500 });
+      return NextResponse.json({ error: "No OpenRouter API key configured." }, { status: 500 });
     }
 
     const userContext = user
@@ -87,46 +80,33 @@ export async function POST(request: Request) {
 
     const userPrompt = `${userContext}${platformHint}Extract a complete psychological profile with smart questions and language analysis from the following conversations:\n\n${text}`;
 
-    const runWithModel = async (model: string) => {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://ghost-mentor-ai.vercel.app",
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini Extraction Error for ${model}: ${errorText.slice(0, 200)}`);
-      }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter Extraction Error: ${errorText.slice(0, 200)}`);
+    }
 
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        throw new Error(`Empty response from LLM for ${model}.`);
-      }
-      return resultText;
-    };
-
-    let resultText = "";
-    try {
-      resultText = await runWithModel(GEMINI_MODEL);
-    } catch (err) {
-      console.warn(`Extraction failed with ${GEMINI_MODEL}, trying gemini-2.5-flash fallback...`, err);
-      try {
-        resultText = await runWithModel("gemini-2.5-flash");
-      } catch (fallbackErr) {
-        throw new Error(`Extraction failed. Pro error: ${(err as Error).message}. Flash error: ${(fallbackErr as Error).message}`);
-      }
+    const data = await response.json();
+    const resultText = data?.choices?.[0]?.message?.content;
+    if (!resultText) {
+      throw new Error("Empty response from OpenRouter Extraction.");
     }
 
     const profile = JSON.parse(resultText);
