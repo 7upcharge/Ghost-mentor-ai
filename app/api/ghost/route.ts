@@ -203,13 +203,18 @@ export async function POST(request: Request) {
   }
 
   // ── Build system prompt ───────────────────────────────────────────────────
-  const systemPrompt = MODEL_PIPELINE.buildSystemPrompt(
+  let systemPrompt = MODEL_PIPELINE.buildSystemPrompt(
     payload.user,
     payload.memoryProfile ?? fallback.updatedMemoryProfile,
     payload.languageProfile,
     chatSummary,
     confusionLevel
   );
+
+  const isDoubleConfusion = currentIsConfusion && (payload.confusionCount ?? 0) >= 1;
+  if (isDoubleConfusion) {
+    systemPrompt += `\nDOUBLE CONFUSION — one sentence only.\nAsk: 'Is yeh wala version better samjha?'`;
+  }
 
   // ── Intercept "What do you know about me" patterns ────────────────────────
   const knowMePatterns = [

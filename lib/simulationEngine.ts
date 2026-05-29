@@ -72,6 +72,11 @@ const CONFUSION_PATTERNS = [
   /^wut[?!]*$/i,
   /^haan[?!]*\s*kya/i,
   /same thing again/i,
+  /aur explain karo/i,
+  /detail mein batao/i,
+  /elaborate/i,
+  /^(kaise\??|kaise)$/i,
+  /^(hmm+|huh+|what+|wat+)\??$/i,
 ];
 
 export function isConfusionMessage(text: string): boolean {
