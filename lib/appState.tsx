@@ -30,9 +30,11 @@ export interface InsightCard {
 }
 
 export interface UserProfile {
+  id: string;
   name: string;
   aspiration: string;
   currentStruggle: string;
+  voiceId?: string | null;
 }
 
 export interface FutureSelfMemoryProfile {
@@ -62,15 +64,50 @@ export interface FutureSelfMemoryProfile {
   };
 }
 
-export type Screen = "landing" | "onboarding" | "chat";
+export type Screen = "landing" | "memory-transfer" | "smart-onboarding" | "onboarding" | "voice-clone" | "chat" | "analyzer" | "future-projection";
+
+export interface TransferSource {
+  platform: "chatgpt" | "claude" | "gemini" | "grok" | "perplexity" | "manual";
+  messageCount: number;
+  uploaded: boolean;
+}
+
+export interface LanguageProfileState {
+  dominantLanguage: "hindi" | "english" | "hinglish";
+  sentenceLength: "short" | "medium" | "long";
+  formality: "casual" | "formal";
+  commonSlang: string[];
+  frustrationStyle: string;
+  excitementStyle: string;
+}
+
+export interface PersonalityProfile {
+  coreFears: string[];
+  biggestAmbitions: string[];
+  avoidancePatterns: string[];
+  communicationStyle: {
+    confusionExpression: string;
+    excitementExpression: string;
+    doubtExpression: string;
+    overallTone: string;
+  };
+  recurringStruggles: string[];
+  selfTalkPatterns: string[];
+  unstatedValues: string[];
+  analysisNote: string;
+}
 
 export interface AppState {
   screen: Screen;
   user: UserProfile;
   messages: Message[];
   memoryProfile: FutureSelfMemoryProfile;
+  languageProfile: LanguageProfileState | null;
+  transferSources: TransferSource[];
+  confidenceScore: number;
   isThinking: boolean;
   onboardingStep: number;
+  futureProjections: FutureProjection[] | null;
 }
 
 // ═══════════════════════════════════════════
@@ -87,6 +124,12 @@ type Action =
   | { type: "SET_MEMORY_PROFILE"; memoryProfile: FutureSelfMemoryProfile }
   | { type: "RESET_MEMORY_PROFILE" }
   | { type: "SET_THINKING"; isThinking: boolean }
+  | { type: "SET_USER_ID"; id: string }
+  | { type: "SET_VOICE_ID"; voiceId: string }
+  | { type: "SET_LANGUAGE_PROFILE"; languageProfile: LanguageProfileState }
+  | { type: "SET_TRANSFER_SOURCES"; transferSources: TransferSource[] }
+  | { type: "SET_CONFIDENCE_SCORE"; score: number }
+  | { type: "SET_FUTURE_PROJECTIONS"; projections: FutureProjection[] | null }
   | { type: "UPDATE_LAST_GHOST_MESSAGE"; text: string; insightCard?: InsightCard | null; futureProjection?: FutureProjection | null };
 
 // ═══════════════════════════════════════════
@@ -127,14 +170,20 @@ export function createEmptyFutureSelfMemoryProfile(): FutureSelfMemoryProfile {
 const initialState: AppState = {
   screen: "landing",
   user: {
+    id: "",
     name: "",
     aspiration: "",
     currentStruggle: "",
+    voiceId: null,
   },
   messages: [],
   memoryProfile: createEmptyFutureSelfMemoryProfile(),
+  languageProfile: null,
+  transferSources: [],
+  confidenceScore: 0,
   isThinking: false,
   onboardingStep: 0,
+  futureProjections: null,
 };
 
 function mergeStoredFutureSelfMemoryProfile(storedMemory: unknown): FutureSelfMemoryProfile {
@@ -188,6 +237,10 @@ function appReducer(state: AppState, action: Action): AppState {
         ...state,
         user: { ...state.user, currentStruggle: action.struggle },
       };
+    case "SET_USER_ID":
+      return { ...state, user: { ...state.user, id: action.id } };
+    case "SET_VOICE_ID":
+      return { ...state, user: { ...state.user, voiceId: action.voiceId } };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
     case "SET_MEMORY_PROFILE":
@@ -196,6 +249,14 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, memoryProfile: createEmptyFutureSelfMemoryProfile() };
     case "SET_THINKING":
       return { ...state, isThinking: action.isThinking };
+    case "SET_LANGUAGE_PROFILE":
+      return { ...state, languageProfile: action.languageProfile };
+    case "SET_TRANSFER_SOURCES":
+      return { ...state, transferSources: action.transferSources };
+    case "SET_CONFIDENCE_SCORE":
+      return { ...state, confidenceScore: action.score };
+    case "SET_FUTURE_PROJECTIONS":
+      return { ...state, futureProjections: action.projections };
     case "UPDATE_LAST_GHOST_MESSAGE": {
       const msgs = [...state.messages];
       const lastGhostIdx = msgs.findLastIndex((m) => m.role === "ghost");
@@ -235,14 +296,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const timer = setTimeout(() => {
       try {
         const storedMemory = window.localStorage.getItem(MEMORY_STORAGE_KEY);
-        if (!storedMemory) return;
-
-        dispatch({
-          type: "SET_MEMORY_PROFILE",
-          memoryProfile: mergeStoredFutureSelfMemoryProfile(JSON.parse(storedMemory)),
-        });
+        if (storedMemory) {
+          dispatch({
+            type: "SET_MEMORY_PROFILE",
+            memoryProfile: mergeStoredFutureSelfMemoryProfile(JSON.parse(storedMemory)),
+          });
+        }
+        
+        const storedUser = window.localStorage.getItem("ghost-mentor.user-profile");
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.id) dispatch({ type: "SET_USER_ID", id: parsed.id });
+          if (parsed.name) dispatch({ type: "SET_USER_NAME", name: parsed.name });
+          if (parsed.aspiration) dispatch({ type: "SET_USER_ASPIRATION", aspiration: parsed.aspiration });
+          if (parsed.currentStruggle) dispatch({ type: "SET_USER_STRUGGLE", struggle: parsed.currentStruggle });
+          if (parsed.voiceId) dispatch({ type: "SET_VOICE_ID", voiceId: parsed.voiceId });
+        }
       } catch {
         window.localStorage.removeItem(MEMORY_STORAGE_KEY);
+        window.localStorage.removeItem("ghost-mentor.user-profile");
       }
     }, 0);
 
@@ -252,6 +324,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(state.memoryProfile));
   }, [state.memoryProfile]);
+
+  useEffect(() => {
+    window.localStorage.setItem("ghost-mentor.user-profile", JSON.stringify(state.user));
+  }, [state.user]);
 
   const goToScreen = useCallback(
     (screen: Screen) => dispatch({ type: "SET_SCREEN", screen }),

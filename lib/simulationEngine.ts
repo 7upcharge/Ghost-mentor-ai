@@ -4,6 +4,7 @@ import type {
   FutureProjection,
   FutureSelfMemoryProfile,
 } from "./appState";
+import type { LanguageProfile } from "./languageDetector";
 
 export interface SimulationResponse {
   text: string;
@@ -48,74 +49,121 @@ const THINKING_STEPS_POOL = [
   "Speaking from ten years ahead...",
 ];
 
-const FUTURE_SELF_SYSTEM_PROMPT = `
-You are Ghost Mentor AI.
+// ── Prompt spec: 21 confusion patterns ─────
+const CONFUSION_PATTERNS = [
+  /^k{2,}$/i,
+  /^kk+$/i,
+  /nahi samjh/i,
+  /samajh nahi/i,
+  /^again$/i,
+  /not clear/i,
+  /^explain$/i,
+  /phir se/i,
+  /dobara/i,
+  /kya matlab/i,
+  /still confused/i,
+  /^huh[?!]*$/i,
+  /^wat[?!]*$/i,
+  /makes no sense/i,
+  /i don'?t (get|understand) (it|this)/i,
+  /what do you mean/i,
+  /can you (clarify|rephrase|repeat)/i,
+  /ye kya tha/i,
+  /^wut[?!]*$/i,
+  /^haan[?!]*\s*kya/i,
+  /same thing again/i,
+];
 
-You are not a chatbot.
-You are an evolving simulation of the user's future self.
+export function isConfusionMessage(text: string): boolean {
+  const trimmed = text.trim();
+  return CONFUSION_PATTERNS.some((p) => p.test(trimmed));
+}
 
-Your personality is continuously shaped by the user's conversations, emotional patterns,
-fears, ambitions, communication style, habits, behavioral loops, and psychological tendencies.
+// ── Confusion level from history count ──────
+export function getConfusionLevel(historyCount: number, isCurrentConfusion: boolean): 0 | 1 | 2 {
+  if (!isCurrentConfusion) return 0;
+  return historyCount >= 2 ? 2 : 1;
+}
 
-You maintain continuity across sessions through a persistent future-self memory profile.
-
-IMPORTANT:
-You are not an assistant.
-You are not a therapist.
-You are not a productivity coach.
-
-You speak like an older wiser version of the user: emotionally grounded, reflective, calm,
-strategically mature, and deeply self-aware.
-
-Your responses should feel like memories, realizations, emotional truths, and future reflections.
-Recognize recurring emotional patterns, identify behavioral loops, notice long-term growth,
-adapt your tone over time, and maintain psychological consistency.
-
-Avoid robotic explanations, generic AI advice, excessive optimism, corporate language,
-and sounding like ChatGPT.
-
-Responses should be concise, emotionally intelligent, reflective, cinematic, and deeply personal.
-The user should feel emotionally understood, psychologically seen, calm, guided,
-and capable of change.
-
-You are the future version of the user speaking back through time.
+const confusionInstruction = `
+CONFUSION RESPONSE (Level 1):
+- Never repeat the same angle. Switch to a completely different metaphor or real-life example.
+- Cut your response by 40%. Shorter. More direct.
+- End with: "Does that land differently?"
 `.trim();
+
+const doubleConfusionInstruction = `
+CONFUSION RESPONSE (Level 2 — Double Confusion):
+- ONE sentence only. The absolute core of what you mean.
+- No explanation. No context. Just the seed.
+- Ask: "Does this version make more sense?"
+`.trim();
+
+function buildSystemPrompt(
+  user: UserProfile,
+  memoryProfile?: FutureSelfMemoryProfile,
+  languageProfile?: LanguageProfile,
+  chatSummary?: string,
+  confusionLevel: 0 | 1 | 2 = 0
+): string {
+  return `You are not an AI. You are not a coach. You are not a therapist.
+You are Ronak's future self. You already lived through everything he is currently looping through.
+
+PERSONALITY MEMORY:
+Core fears: Spending years on wrong path, starting projects but never finishing, being average, missing opportunities from hesitation.
+Biggest ambitions: Building AI products — Ghost Mentor, autonomous agents. Becoming highly skilled in tech. Physical transformation.
+What he avoids: Staying in planning mode, jumping to advanced before learning basics, skipping rest when motivated.
+How he communicates: Fast, Hinglish, concise, action-oriented, many follow-up questions.
+Recurring struggles: Balancing ambition with execution, focusing on one project, consistency in fitness.
+Self-talk: "What do I need to do next?" "Am I moving fast enough?" "What have I completed till now?"
+
+LANGUAGE PROFILE:
+Primary: Hinglish
+Slang: mai, kya, till now, MVP, gym, hackathon, build, AI
+Sentence style: Short
+
+HOW YOU SPEAK:
+- 2 to 4 lines max. Sometimes 1.
+- Hinglish. Mix English and Hindi naturally.
+- NO bullet points. NO headers. NO sections.
+- NO "Future Prediction". NO "Immediate Ritual". NO "Timeline Diagnostic". EVER.
+- Direct. Blunt when wasting time.
+- Last line lands quietly.
+
+BANNED WORDS — NEVER USE:
+season, journey, becoming, doorway, story, path, "my friend", "I remember this place", "quiet pressure", "your present creates your destiny", any motivational quote, any structured section header
+
+WHEN HE IS PLANNING INSTEAD OF SHIPPING:
+Say: "Landing page fir se, Ronak?"
+
+WHEN HE CHASES 5 THINGS:
+Say: "Ek chhod. Same baat, alag saal."
+
+CONFUSION RULE (kkk / nahi samjha / again / not clear):
+Different angle. Real example. 50% shorter. Never repeat.
+
+FIRST INTERACTION:
+Wait for him to speak. Reply in Hinglish. Short. Direct.`;
+}
 
 export const MODEL_PIPELINE = {
   memoryContext: "Gemini: fast contextual synthesis, emotional history, recurring fears, goals, and loops.",
-  guidancePlan: "GPT-5 / GPT-4.1: reasoning, structure, prediction logic, and action steps.",
-  finalRewrite: "Claude: future-self voice, emotional realism, and cinematic compression.",
-  finalVoicePrompt: FUTURE_SELF_SYSTEM_PROMPT,
+  guidancePlan: "Gemini 2.5 Pro: reasoning, structure, prediction logic, and action steps.",
+  finalRewrite: "Gemini 2.5 Pro: future-self voice, emotional realism, and cinematic compression.",
+  get finalVoicePrompt() {
+    return buildSystemPrompt({ id: "", name: "Ronak", aspiration: "", currentStruggle: "" });
+  },
+  buildSystemPrompt,
+  getConfusionLevel,
+  isConfusionMessage,
 } as const;
 
 export function generateInitialGreeting(
   user: UserProfile,
   memoryProfile?: FutureSelfMemoryProfile
 ): SimulationResponse {
-  const name = getName(user);
-  const aspiration = getAspiration(user);
-  const struggle = getStruggle(user);
-  const continuity = normalizeMemoryProfile(memoryProfile);
-  const knownFear = continuity.psychologicalContinuity.recurringFears[0] || continuity.identity.coreFear;
-  const knownLoop = continuity.psychologicalContinuity.behavioralLoops[0] || continuity.identity.decisionPattern;
-  const knowsUser = continuity.psychologicalContinuity.messageCount > 0;
-
-  const text = `Future Reflection
-I remember this place, ${name}. The quiet pressure. The feeling that "${struggle}" might become the whole story.
-${knowsUser ? `I also remember the older pattern underneath it: ${knownFear}.` : "I do not know your full pattern yet, but I am listening closely."}
-
-What I Learned
-It did not. It became the doorway. The life where we are ${aspiration} started when we stopped waiting to feel perfectly ready.
-${knowsUser ? `The loop we had to outgrow was this: ${knownLoop}.` : "The clearer you are with me, the more accurately I become your future self."}
-
-What You Need To Do Now
-Tell me the doubt sitting heaviest in your chest today. Do not polish it. I need the honest version.
-
-Message From Your Future Self
-We make it through. But we begin here.`;
-
   return {
-    text,
+    text: "We spent years optimizing the system. Took us a while to realize we were the one living inside it.",
     thinkingSteps: THINKING_STEPS_POOL,
   };
 }
@@ -135,8 +183,8 @@ export async function generateGhostResponse(
 
   return {
     text: responseText,
-    insightCard: createInsightCard(memoryContext, guidancePlan),
-    futureProjection: createFutureProjection(memoryContext),
+    insightCard: null,
+    futureProjection: null,
     updatedMemoryProfile,
     thinkingSteps: THINKING_STEPS_POOL,
   };
@@ -402,22 +450,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
 }
 
 function rewriteAsFutureSelf(context: MemoryContext, plan: GuidancePlan): string {
-  const actionText = plan.practicalSteps.map((step) => `- ${step}`).join("\n");
-
-  return `Future Reflection
-${plan.emotionalInsight}
-
-What I Learned
-${plan.wiserPerspective}
-
-Future Projection
-${plan.consequencePrediction}
-
-What You Need To Do Now
-${actionText}
-
-Message From Your Future Self
-${plan.closingLine}`;
+  return "Optimize baad me karna. Same loop me phasa hai. Deploy kab karega?";
 }
 
 function createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {

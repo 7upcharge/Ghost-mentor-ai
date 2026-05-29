@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import GhostOrb from "./GhostOrb";
 import TypewriterText from "./TypewriterText";
 import GlowButton from "./GlowButton";
@@ -166,6 +166,7 @@ function Wordmark() {
 }
 
 export default function LandingPage({ onStart }: LandingPageProps) {
+  const shouldReduceMotion = useReducedMotion();
   const [headlineDone, setHeadlineDone] = useState(false);
   const [subtitleDone, setSubtitleDone] = useState(false);
 
@@ -205,14 +206,14 @@ export default function LandingPage({ onStart }: LandingPageProps) {
       </motion.nav>
 
       {/* Hero */}
-      <div className="relative z-10 w-full max-w-[680px] mx-auto px-8 sm:px-12 pt-4">
+      <div className="relative z-10 w-full max-w-[800px] mx-auto px-8 sm:px-12 pt-4">
 
         {/* Orb zone */}
         <div className="flex flex-col items-start mb-10">
           <motion.div
-            initial={{ opacity: 0, scale: 0.82, y: 12 }}
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.82, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 2.0, ease: [0.16, 1, 0.3, 1] }}
+            transition={shouldReduceMotion ? { duration: 0.5 } : { duration: 2.0, ease: [0.16, 1, 0.3, 1] }}
           >
             <GhostOrb size="hero" />
           </motion.div>
@@ -235,7 +236,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
           {/* Headline */}
           <div className="min-h-[3.2rem] sm:min-h-[5.5rem] mb-6">
             <TypewriterText
-              text="Talk to the version of you who made it through."
+              text="Meet the version of you that made it."
               speed={36}
               delay={900}
               onComplete={onHeadlineComplete}
@@ -282,10 +283,10 @@ export default function LandingPage({ onStart }: LandingPageProps) {
           <AnimatePresence>
             {subtitleDone && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-start gap-4"
+                transition={shouldReduceMotion ? { duration: 0.35 } : { duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col items-start gap-4 animate-fade-in"
               >
                 <GlowButton onClick={onStart} size="xl">
                   Begin
@@ -318,6 +319,55 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Marketing Cards */}
+        <AnimatePresence>
+          {subtitleDone && (
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={shouldReduceMotion ? { duration: 0.5 } : { duration: 0.8, delay: 0.35, ease: "easeOut" }}
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 w-full relative z-20"
+            >
+              {[
+                {
+                  title: "Memory Transfer",
+                  desc: "Consolidate your conversations from ChatGPT, Claude, Gemini, Grok, and Perplexity into a single cohesive profile.",
+                  icon: "⚡"
+                },
+                {
+                  title: "Voice Cloning Flow",
+                  desc: "Record a 30-second sample to boot Ghost Mentor into your actual cloned voice via ElevenLabs.",
+                  icon: "🎙️"
+                },
+                {
+                  title: "Continuous Dialogue",
+                  desc: "The system remembers your struggles and realizations across sessions, serving as a true evolving mentor.",
+                  icon: "🧠"
+                }
+              ].map((card, i) => (
+                <motion.div
+                  key={i}
+                  whileHover={shouldReduceMotion ? {} : { y: -2, borderColor: "rgba(139,108,246,0.22)" }}
+                  className="p-4 rounded-xl flex flex-col gap-2 transition-all duration-300"
+                  style={{
+                    background: "rgba(15, 15, 20, 0.45)",
+                    border: "1px solid rgba(255,255,255,0.055)",
+                    backdropFilter: "blur(12px)",
+                  }}
+                >
+                  <span className="text-lg">{card.icon}</span>
+                  <h3 className="text-[12px] font-semibold tracking-wider uppercase text-ghost-accent-light" style={{ fontFamily: "var(--font-heading)" }}>
+                    {card.title}
+                  </h3>
+                  <p className="text-[11px] font-light text-ghost-text-secondary/70 leading-relaxed">
+                    {card.desc}
+                  </p>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Footer */}
@@ -330,10 +380,10 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             className="absolute bottom-6 left-0 right-0 flex justify-center"
           >
             <p
-              className="text-[9px] tracking-[0.25em] uppercase"
-              style={{ color: "rgba(255,255,255,0.1)" }}
+              className="text-[9px] tracking-[0.25em] uppercase text-center max-w-[90%] px-4"
+              style={{ color: "rgba(255,255,255,0.15)" }}
             >
-              Built with soul — not just code
+              Meet the version of you that made it. Built with soul — not just code.
             </p>
           </motion.div>
         )}

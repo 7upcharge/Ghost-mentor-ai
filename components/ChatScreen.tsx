@@ -3,8 +3,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useApp, InsightCard, FutureProjection } from "@/lib/appState";
-import { generateInitialGreeting, generateGhostResponse, SimulationResponse } from "@/lib/simulationEngine";
-import GhostOrb from "./GhostOrb";
+import {
+  generateInitialGreeting,
+  generateGhostResponse,
+  isConfusionMessage,
+  SimulationResponse,
+} from "@/lib/simulationEngine";
+import GhostOrb, { OrbState } from "./GhostOrb";
 import GlowButton from "./GlowButton";
 
 // Film grain
@@ -259,6 +264,10 @@ export default function ChatScreen() {
   const [isTypingGhost, setIsTypingGhost] = useState(false);
   const [thinkingStepIndex, setThinkingStepIndex] = useState(-1);
   const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
+  const [isEndingSession, setIsEndingSession] = useState(false);
+  const [endingStatusText, setEndingStatusText] = useState("");
+  const [orbState, setOrbState] = useState<OrbState>("idle");
+  const [confusionCount, setConfusionCount] = useState(0);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -267,6 +276,7 @@ export default function ChatScreen() {
   const activeGhostTextRef = useRef("");
   const greetingTriggeredRef = useRef(false);
   const greetingSequenceActiveRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const promptSeeds = [
     "Will I make it to where I want to be?",
@@ -274,6 +284,28 @@ export default function ChatScreen() {
     "What step should I take tomorrow morning?",
     "I'm feeling stuck in my current path.",
   ];
+
+  const playGhostResponse = useCallback((text: string, onComplete: () => void) => {
+    if (state.user.voiceId) {
+      const audioUrl = `/api/elevenlabs/tts?text=${encodeURIComponent(text)}&voiceId=${state.user.voiceId}`;
+      const audio = new window.Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        onComplete();
+      };
+      
+      audio.play().catch((err) => {
+        console.error("Audio playback failed", err);
+        onComplete();
+      });
+      
+      return (text.length / 15) * 1000; // ~15 chars/sec
+    } else {
+      setTimeout(onComplete, (text.length / 30) * 1000);
+      return (text.length / 30) * 1000;
+    }
+  }, [state.user.voiceId]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (scrollContainerRef.current) {
@@ -316,9 +348,14 @@ export default function ChatScreen() {
           message: { id, role: "ghost", text: "", timestamp: Date.now() },
         });
 
+        const durationMs = playGhostResponse(initGreeting.text, () => {
+          setIsTypingGhost(false);
+        });
+
         setIsTypingGhost(true);
         let idx = 0;
         activeGhostTextRef.current = "";
+        const intervalTime = Math.max(15, durationMs / initGreeting.text.length);
 
         const interval = setInterval(() => {
           if (idx <= initGreeting.text.length) {
@@ -327,13 +364,12 @@ export default function ChatScreen() {
               type: "UPDATE_LAST_GHOST_MESSAGE",
               text: activeGhostTextRef.current,
             });
-            idx += 2;
+            idx += 1;
           } else {
             clearInterval(interval);
-            setIsTypingGhost(false);
             scrollToBottom();
           }
-        }, 15);
+        }, intervalTime);
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -366,6 +402,7 @@ export default function ChatScreen() {
       if (inputRef.current) inputRef.current.style.height = "auto";
 
       dispatch({ type: "SET_THINKING", isThinking: true });
+      setOrbState("thinking");
       const steps = [
         "Reading the emotional pattern...",
         "Tracing the possible timeline...",
@@ -386,6 +423,9 @@ export default function ChatScreen() {
             message: cleanedText,
             historyCount: state.messages.length,
             memoryProfile: state.memoryProfile,
+            languageProfile: state.languageProfile,
+            confusionCount,
+            messages: state.messages,
           }),
         });
 
@@ -407,6 +447,17 @@ export default function ChatScreen() {
         });
       }
 
+      // Track confusion count
+      const isConfused = isConfusionMessage(cleanedText);
+      const nextConfusionCount = isConfused ? confusionCount + 1 : 0;
+      setConfusionCount(nextConfusionCount);
+
+      // Set orb to confused state for 2s if confusion detected
+      if (isConfused) {
+        setOrbState("confused");
+        setTimeout(() => setOrbState("thinking"), 2000);
+      }
+
       for (let i = 0; i < steps.length; i++) {
         setThinkingStepIndex(i);
         await new Promise((resolve) => setTimeout(resolve, 1300));
@@ -414,6 +465,7 @@ export default function ChatScreen() {
 
       setThinkingStepIndex(-1);
       dispatch({ type: "SET_THINKING", isThinking: false });
+      setOrbState("speaking");
 
       const ghostMsgId = Math.random().toString();
       dispatch({
@@ -421,17 +473,16 @@ export default function ChatScreen() {
         message: { id: ghostMsgId, role: "ghost", text: "", timestamp: Date.now() },
       });
 
-      setIsTypingGhost(true);
-      let idx = 0;
-      activeGhostTextRef.current = "";
-
-      const interval = setInterval(() => {
-        if (idx <= response.text.length) {
-          activeGhostTextRef.current = response.text.slice(0, idx);
-          dispatch({ type: "UPDATE_LAST_GHOST_MESSAGE", text: activeGhostTextRef.current });
-          idx += 2;
+      // Word-by-word streaming: 0.05s stagger per word (Prompt spec)
+      const words = response.text.split(" ");
+      let wordIdx = 0;
+      const wordInterval = setInterval(() => {
+        if (wordIdx < words.length) {
+          const partial = words.slice(0, wordIdx + 1).join(" ");
+          dispatch({ type: "UPDATE_LAST_GHOST_MESSAGE", text: partial });
+          wordIdx++;
         } else {
-          clearInterval(interval);
+          clearInterval(wordInterval);
           dispatch({
             type: "UPDATE_LAST_GHOST_MESSAGE",
             text: response.text,
@@ -439,11 +490,13 @@ export default function ChatScreen() {
             futureProjection: response.futureProjection,
           });
           setIsTypingGhost(false);
+          setOrbState("idle");
           scrollToBottom();
         }
-      }, 25);
+      }, 50); // 50ms per word ≈ 0.05s stagger
+
     },
-    [state.user, state.memoryProfile, state.messages.length, state.isThinking, isTypingGhost, dispatch, scrollToBottom]
+    [state.user, state.memoryProfile, state.messages.length, state.languageProfile, state.isThinking, isTypingGhost, confusionCount, dispatch, scrollToBottom]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -464,6 +517,53 @@ export default function ChatScreen() {
     dispatch({ type: "SET_SCREEN", screen: "landing" });
     window.location.reload();
   }, [goToScreen, dispatch]);
+
+  const handleEndSession = useCallback(async () => {
+    if (state.messages.length <= 1) {
+      goToScreen("landing");
+      return;
+    }
+
+    setIsEndingSession(true);
+    setEndingStatusText("Synthesizing session memory...");
+
+    try {
+      // 1. Call Session Memory Summary API
+      await fetch("/api/session-memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: state.user.id,
+          messages: state.messages,
+        }),
+      });
+
+      setEndingStatusText("Tracing timeline projections...");
+
+      // 2. Call Future Projections API
+      const projectionResponse = await fetch("/api/future-projection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: state.user.id,
+          messages: state.messages,
+        }),
+      });
+
+      if (projectionResponse.ok) {
+        const projections = await projectionResponse.json();
+        dispatch({ type: "SET_FUTURE_PROJECTIONS", projections });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      goToScreen("future-projection");
+    } catch (error) {
+      console.error("Failed to end session cleanly:", error);
+      goToScreen("landing");
+    } finally {
+      setIsEndingSession(false);
+    }
+  }, [state.messages, state.user.id, goToScreen, dispatch]);
 
   const activeThinkingStep = thinkingStepIndex >= 0 ? thinkingSteps[thinkingStepIndex] : null;
   const isOrbPulsing = state.isThinking || isTypingGhost;
@@ -503,19 +603,35 @@ export default function ChatScreen() {
           </span>
         </motion.div>
 
-        {/* Reset */}
-        <motion.button
-          onClick={handleReset}
-          whileHover={{ opacity: 0.8 }}
-          className="text-[10px] font-medium tracking-wider uppercase text-ghost-muted hover:text-ghost-text-secondary transition-colors duration-200 cursor-pointer"
-        >
-          New Reflection
-        </motion.button>
+        {/* Actions */}
+        <div className="flex items-center gap-4">
+          <motion.button
+            onClick={handleEndSession}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 transition-all duration-200 cursor-pointer animate-fade-in"
+            style={{ color: "rgba(167,139,250,0.95)" }}
+          >
+            End Session
+          </motion.button>
+          
+          <motion.button
+            onClick={handleReset}
+            whileHover={{ opacity: 0.8 }}
+            className="text-[10px] font-medium tracking-wider uppercase text-ghost-muted hover:text-ghost-text-secondary transition-colors duration-200 cursor-pointer"
+          >
+            New Reflection
+          </motion.button>
+        </div>
       </header>
 
       {/* Floating Orb Zone */}
       <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-2.5">
-        <GhostOrb size="md" animate isThinking={isOrbPulsing} />
+        <GhostOrb
+          size="md"
+          animate
+          state={orbState !== "idle" ? orbState : (state.isThinking || isTypingGhost ? "thinking" : "idle")}
+        />
 
         {/* Thinking label */}
         <AnimatePresence mode="wait">
@@ -705,6 +821,28 @@ export default function ChatScreen() {
           </span>
         </div>
       </div>
+
+      {/* Cinematic End Session Overlay */}
+      <AnimatePresence>
+        {isEndingSession && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md"
+          >
+            <GhostOrb size="md" isThinking={true} />
+            <motion.p
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[12px] tracking-[0.2em] uppercase font-semibold font-heading mt-6"
+              style={{ color: "rgba(139,108,246,0.85)" }}
+            >
+              {endingStatusText}
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

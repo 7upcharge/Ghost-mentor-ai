@@ -1,22 +1,36 @@
 import { NextResponse } from "next/server";
-import type { UserProfile, FutureSelfMemoryProfile } from "@/lib/appState";
-import { generateGhostResponse, MODEL_PIPELINE, type SimulationResponse } from "@/lib/simulationEngine";
+import type { UserProfile, FutureSelfMemoryProfile, LanguageProfileState } from "@/lib/appState";
+import {
+  generateGhostResponse,
+  MODEL_PIPELINE,
+  isConfusionMessage,
+  getConfusionLevel,
+  type SimulationResponse,
+} from "@/lib/simulationEngine";
+import { supabase } from "@/lib/supabaseClient";
 
 interface GhostRequest {
   user: UserProfile;
   message: string;
   historyCount: number;
   memoryProfile?: FutureSelfMemoryProfile;
+  languageProfile?: LanguageProfileState;
+  /** Number of consecutive confusion messages the user has sent */
+  confusionCount?: number;
+  messages?: any[];
 }
 
 interface ProviderTextResponse {
   text: string;
-  provider: "gemini" | "openai" | "anthropic" | "local";
+  provider: "gemini-primary" | "openrouter-deepseek" | "local";
 }
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
+// ── Model constants ──────────────────────────────────────────────────────────
+// Primary: Gemini 2.5 Pro via Google AI Studio key (Prompt Pack spec)
+const GEMINI_PRIMARY_MODEL = "gemini-2.5-pro";
+
+// Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
+const OPENROUTER_MODEL = "deepseek/deepseek-r1";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GhostRequest>;
@@ -30,8 +44,19 @@ export async function POST(request: Request) {
     message: body.message,
     historyCount: body.historyCount ?? 0,
     memoryProfile: body.memoryProfile,
+    languageProfile: body.languageProfile,
+    confusionCount: body.confusionCount ?? 0,
+    messages: body.messages,
   };
 
+  // ── Detect confusion level ────────────────────────────────────────────────
+  const currentIsConfusion = isConfusionMessage(payload.message);
+  const confusionLevel = getConfusionLevel(
+    payload.confusionCount ?? 0,
+    currentIsConfusion
+  );
+
+  // ── Generate local fallback (always ready) ────────────────────────────────
   const fallback = await generateGhostResponse(
     payload.user,
     payload.message,
@@ -39,207 +64,180 @@ export async function POST(request: Request) {
     payload.memoryProfile
   );
 
-  try {
-    const memory = await runGeminiMemory(payload, fallback);
-    const guidance = await runOpenAIGuidance(payload, memory.text, fallback);
-    const final = await runClaudeRewrite(payload, memory.text, guidance.text, fallback);
+  // ── Fetch last session summary from Supabase ──────────────────────────────
+  let chatSummary = "";
+  if (
+    payload.user.id &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    try {
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("chat_summary, last_session_summary")
+        .eq("user_id", payload.user.id)
+        .single();
+      if (data?.chat_summary) {
+        chatSummary = data.chat_summary;
+      } else if (data?.last_session_summary) {
+        chatSummary = data.last_session_summary; // backward compat
+      }
+    } catch {
+      // Supabase unavailable — continue without session memory
+    }
+  }
 
+  // ── Build system prompt ───────────────────────────────────────────────────
+  const systemPrompt = MODEL_PIPELINE.buildSystemPrompt(
+    payload.user,
+    payload.memoryProfile ?? fallback.updatedMemoryProfile,
+    payload.languageProfile,
+    chatSummary,
+    confusionLevel
+  );
+
+  // ── Primary: Gemini 2.5 Pro via Google AI Studio ──────────────────────────
+  try {
+    const geminiResult = await callGeminiPrimary(payload, systemPrompt);
     return NextResponse.json({
       ...fallback,
-      text: final.text,
-      providerTrace: [memory.provider, guidance.provider, final.provider],
+      text: geminiResult.text,
+      insightCard: null,
+      futureProjection: null,
+      confusionDetected: currentIsConfusion,
+      providerTrace: [geminiResult.provider],
     });
-  } catch {
+  } catch (primaryError) {
+    console.warn("Gemini primary failed, trying OpenRouter DeepSeek fallback…", primaryError);
+  }
+
+  // ── Fallback: DeepSeek-R1-Free via OpenRouter ─────────────────────────────
+  try {
+    const deepseekResult = await callOpenRouterDeepSeek(payload, systemPrompt);
     return NextResponse.json({
       ...fallback,
-      providerTrace: ["local"],
+      text: deepseekResult.text,
+      insightCard: null,
+      futureProjection: null,
+      confusionDetected: currentIsConfusion,
+      providerTrace: [deepseekResult.provider],
     });
+  } catch (fallbackError) {
+    console.error("OpenRouter fallback also failed, using local static template.", fallbackError);
+  }
+
+  // ── Last resort: local static template ───────────────────────────────────
+  return NextResponse.json({
+    ...fallback,
+    insightCard: null,
+    futureProjection: null,
+    confusionDetected: currentIsConfusion,
+    providerTrace: ["local"],
+  });
+}
+
+// ── Gemini 2.5 Pro via Google AI Studio ─────────────────────────────────────
+async function callGeminiPrimary(
+  payload: GhostRequest,
+  systemPrompt: string
+): Promise<ProviderTextResponse> {
+  // Support both key names from .env.local
+  const apiKey =
+    process.env.GOOGLE_AI_STUDIO_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY;
+
+  if (!apiKey) throw new Error("No Google AI Studio key configured.");
+
+  const runWithModel = async (model: string) => {
+    // Map messages history to Gemini format (role must be "user" or "model")
+    const contents = (payload.messages && payload.messages.length > 0)
+      ? payload.messages.map((m: any) => ({
+          role: m.role === "ghost" ? "model" : "user",
+          parts: [{ text: m.text }]
+        }))
+      : [{ role: "user", parts: [{ text: payload.message }] }];
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.75,
+            maxOutputTokens: 650,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Gemini ${model} error: ${err.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof text !== "string" || !text.trim()) {
+      throw new Error(`Empty response from Gemini ${model}.`);
+    }
+    return text.trim();
+  };
+
+  try {
+    const text = await runWithModel(GEMINI_PRIMARY_MODEL);
+    return { text, provider: "gemini-primary" };
+  } catch (err) {
+    console.warn(`Failed to call ${GEMINI_PRIMARY_MODEL}, trying gemini-2.5-flash fallback...`, err);
+    try {
+      const text = await runWithModel("gemini-2.5-flash");
+      return { text, provider: "gemini-primary" };
+    } catch (fallbackErr) {
+      throw new Error(`Gemini primary failed. Pro error: ${(err as Error).message}. Flash error: ${(fallbackErr as Error).message}`);
+    }
   }
 }
 
-async function runGeminiMemory(
+// ── DeepSeek-R1-Free via OpenRouter ─────────────────────────────────────────
+async function callOpenRouterDeepSeek(
   payload: GhostRequest,
-  fallback: SimulationResponse
+  systemPrompt: string
 ): Promise<ProviderTextResponse> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!apiKey) return { text: fallback.text, provider: "local" };
+  const apiKey = process.env.OPENROUTER_KEY;
+  if (!apiKey) throw new Error("No OpenRouter key configured.");
 
-  const prompt = `
-${MODEL_PIPELINE.memoryContext}
-
-Extract only compact JSON with these keys:
-emotional_state, repeated_fears, goals, behavioral_loops, hidden_need.
-
-User profile:
-Name: ${payload.user.name || "unknown"}
-Aspiration: ${payload.user.aspiration || "unknown"}
-Current struggle: ${payload.user.currentStruggle || "unknown"}
-
-Persistent future-self memory profile:
-${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
-
-Current message:
-${payload.message}
-`.trim();
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.25, maxOutputTokens: 400 },
-      }),
-    }
-  );
-
-  if (!response.ok) throw new Error("Gemini request failed.");
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  return { text: typeof text === "string" ? text : fallback.text, provider: "gemini" };
-}
-
-async function runOpenAIGuidance(
-  payload: GhostRequest,
-  memoryContext: string,
-  fallback: SimulationResponse
-): Promise<ProviderTextResponse> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return { text: fallback.text, provider: "local" };
-
-  const prompt = `
-${MODEL_PIPELINE.guidancePlan}
-
-Use the memory context to produce a concise plan for the future-self response.
-Return compact JSON with these keys:
-emotional_insight, wiser_perspective, future_projection, practical_steps, closing_line.
-
-Memory context:
-${memoryContext}
-
-Persistent future-self memory profile:
-${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
-
-User message:
-${payload.message}
-`.trim();
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://ghost-mentor.ai",
+      "X-Title": "Ghost Mentor AI",
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      input: prompt,
-      max_output_tokens: 650,
-    }),
-  });
-
-  if (!response.ok) throw new Error("OpenAI request failed.");
-  const data = await response.json();
-
-  return {
-    text: extractOpenAIText(data) || fallback.text,
-    provider: "openai",
-  };
-}
-
-async function runClaudeRewrite(
-  payload: GhostRequest,
-  memoryContext: string,
-  guidance: string,
-  fallback: SimulationResponse
-): Promise<ProviderTextResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { text: fallback.text, provider: "local" };
-
-  const prompt = `
-${MODEL_PIPELINE.finalRewrite}
-
-Rewrite the guidance into this exact structure:
-
-Future Reflection
-...
-
-What I Learned
-...
-
-Future Projection
-...
-
-What You Need To Do Now
-- ...
-- ...
-- ...
-
-Message From Your Future Self
-...
-
-Rules:
-- Keep it short: 2 to 5 dense paragraphs plus the action bullets.
-- Speak as the user's future self, not as an assistant.
-- No generic motivation. No therapy disclaimer. No corporate tone.
-
-Memory context:
-${memoryContext}
-
-Guidance plan:
-${guidance}
-
-Persistent future-self memory profile:
-${JSON.stringify(payload.memoryProfile ?? fallback.updatedMemoryProfile, null, 2)}
-
-User message:
-${payload.message}
-`.trim();
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: payload.message },
+      ],
       max_tokens: 650,
-      temperature: 0.7,
-      system: MODEL_PIPELINE.finalVoicePrompt,
-      messages: [{ role: "user", content: prompt }],
+      temperature: 0.75,
     }),
   });
 
-  if (!response.ok) throw new Error("Claude request failed.");
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter DeepSeek error: ${err.slice(0, 200)}`);
+  }
+
   const data = await response.json();
-  const text = data?.content?.find((part: { type?: string }) => part.type === "text")?.text;
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Empty response from OpenRouter DeepSeek.");
+  }
 
-  return { text: typeof text === "string" ? text : fallback.text, provider: "anthropic" };
-}
-
-function extractOpenAIText(data: unknown): string {
-  if (!data || typeof data !== "object") return "";
-
-  const outputText = (data as { output_text?: unknown }).output_text;
-  if (typeof outputText === "string") return outputText;
-
-  const output = (data as { output?: unknown }).output;
-  if (!Array.isArray(output)) return "";
-
-  return output
-    .flatMap((item) => {
-      if (!item || typeof item !== "object") return [];
-      const content = (item as { content?: unknown }).content;
-      return Array.isArray(content) ? content : [];
-    })
-    .map((content) => {
-      if (!content || typeof content !== "object") return "";
-      const text = (content as { text?: unknown }).text;
-      return typeof text === "string" ? text : "";
-    })
-    .filter(Boolean)
-    .join("\n");
+  return { text: text.trim(), provider: "openrouter-deepseek" };
 }
