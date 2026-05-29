@@ -414,23 +414,56 @@ export default function ChatScreen() {
 
       let response: SimulationResponse;
 
-      try {
-        const apiResponse = await fetch("/api/ghost", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user: state.user,
-            message: cleanedText,
-            historyCount: state.messages.length,
-            memoryProfile: state.memoryProfile,
-            languageProfile: state.languageProfile,
-            confusionCount,
-            messages: state.messages,
-          }),
-        });
+      const isFutureProjectionTrigger = [
+        "project my future",
+        "my future",
+        "future dikhao",
+        "future kya hoga",
+        "mera future",
+        "what's my future",
+        "future projection",
+      ].some((trigger) => cleanedText.toLowerCase().includes(trigger));
 
-        if (!apiResponse.ok) throw new Error("Ghost pipeline request failed.");
-        response = (await apiResponse.json()) as SimulationResponse;
+      try {
+        if (isFutureProjectionTrigger) {
+          const apiResponse = await fetch("/api/future-projection", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: state.user.id,
+              personalityProfile: state.memoryProfile,
+              mode: "conversational",
+            }),
+          });
+
+          if (!apiResponse.ok) throw new Error("Future projection request failed.");
+          const resJson = await apiResponse.json();
+          response = {
+            text: resJson.text,
+            updatedMemoryProfile: state.memoryProfile,
+            insightCard: null,
+            futureProjection: null,
+            confusionDetected: false,
+            providerTrace: ["gemini-primary"],
+          } as unknown as SimulationResponse;
+        } else {
+          const apiResponse = await fetch("/api/ghost", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user: state.user,
+              message: cleanedText,
+              historyCount: state.messages.length,
+              memoryProfile: state.memoryProfile,
+              languageProfile: state.languageProfile,
+              confusionCount,
+              messages: state.messages,
+            }),
+          });
+
+          if (!apiResponse.ok) throw new Error("Ghost pipeline request failed.");
+          response = (await apiResponse.json()) as SimulationResponse;
+        }
       } catch {
         response = await generateGhostResponse(
           state.user,
@@ -634,9 +667,11 @@ export default function ChatScreen() {
           </motion.button>
           
           <motion.button
-            onClick={handleReset}
-            whileHover={{ opacity: 0.8 }}
-            className="text-[10px] font-medium tracking-wider uppercase text-ghost-muted hover:text-ghost-text-secondary transition-colors duration-200 cursor-pointer"
+            onClick={() => !(state.isThinking || isTypingGhost) && handleSend("Project my future based on everything you know about me.")}
+            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.4 : 0.8 }}
+            className={`text-[10px] font-medium tracking-wider uppercase transition-colors duration-200 ${
+              (state.isThinking || isTypingGhost) ? "text-ghost-muted/40 cursor-not-allowed" : "text-ghost-muted hover:text-ghost-text-secondary cursor-pointer"
+            }`}
           >
             New Reflection
           </motion.button>

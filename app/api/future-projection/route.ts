@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
-const GEMINI_MODEL = "gemini-2.5-pro";
+const OPENROUTER_MODEL = "google/gemini-2.5-pro-exp";
 
-// ── Prompt 7 — Future Projection System Prompt ───────────────────────────────
-const SYSTEM_PROMPT = `
+// ── Prompt 7 — Future Projection System Prompt (Structured JSON) ───────────────
+const STRUCTURED_SYSTEM_PROMPT = `
 You are a psychological timeline predictor for a future-self AI mentor.
 Analyze the chat log and generate a 3-stage future projection.
 Output ONLY raw JSON. No markdown. No explanations.
@@ -45,19 +45,74 @@ CRITICAL RULES:
 
 export async function POST(request: Request) {
   try {
-    const { userId, messages } = await request.json();
-
-    if (!userId || !messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "Missing userId or messages array." }, { status: 400 });
-    }
-
-    const apiKey =
-      process.env.GOOGLE_AI_STUDIO_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY;
+    const body = await request.json();
+    const apiKey = process.env.OPENROUTER_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ error: "No Gemini API key configured." }, { status: 500 });
+      return NextResponse.json({ error: "No OpenRouter API key configured." }, { status: 500 });
+    }
+
+    // ── Conversational mode (for Project My Future chat trigger) ───────────────
+    if (body.mode === "conversational" || body.personalityProfile) {
+      const profile = body.personalityProfile;
+      if (!profile) {
+        return NextResponse.json({ error: "Missing personalityProfile for conversational mode." }, { status: 400 });
+      }
+
+      const prompt = `Based on this personality profile: ${JSON.stringify(profile)}
+
+Project this person's future in 3 paragraphs.
+Paragraph 1: 6 months if current patterns continue. Honest. Specific to their loops.
+Paragraph 2: 2 years if they make ONE key shift. Name the exact shift.
+Paragraph 3: 5 years highest version. Include what it costs them to get there.
+
+Rules:
+- Hinglish
+- No motivational language
+- Reference their specific patterns — not generic advice
+- Sound like someone who already watched this play out
+- 3-4 sentences per paragraph max`;
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://ghost-mentor.ai",
+          "X-Title": "Ghost Mentor AI",
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "You are Ghost Mentor, speaking to your present-self. You are raw, honest, and speak from ten years ahead.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.75,
+          max_tokens: 650,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`OpenRouter Future Projection Error: ${err.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const text = data?.choices?.[0]?.message?.content;
+      if (typeof text !== "string" || !text.trim()) {
+        throw new Error("Empty response from OpenRouter Future Projection.");
+      }
+
+      return NextResponse.json({ text: text.trim() });
+    }
+
+    // ── Standard structured timeline mode ────────────────────────────────────
+    const { userId, messages } = body;
+    if (!userId || !messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Missing userId or messages array." }, { status: 400 });
     }
 
     const chatLog = messages
@@ -67,46 +122,34 @@ export async function POST(request: Request) {
       })
       .join("\n\n");
 
-    const runWithModel = async (model: string) => {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: chatLog }] }],
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: {
-              temperature: 0.3,
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://ghost-mentor.ai",
+        "X-Title": "Ghost Mentor AI",
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: STRUCTURED_SYSTEM_PROMPT },
+          { role: "user", content: chatLog },
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Gemini Future Projection Error for ${model}: ${errorText.slice(0, 200)}`);
-      }
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenRouter Structured Future Projection Error: ${err.slice(0, 200)}`);
+    }
 
-      const data = await response.json();
-      const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resultText) {
-        throw new Error(`Empty response from Gemini for ${model}.`);
-      }
-      return resultText;
-    };
-
-    let resultText = "";
-    try {
-      resultText = await runWithModel(GEMINI_MODEL);
-    } catch (err) {
-      console.warn(`Future projection failed with ${GEMINI_MODEL}, trying gemini-2.5-flash fallback...`, err);
-      try {
-        resultText = await runWithModel("gemini-2.5-flash");
-      } catch (fallbackErr) {
-        throw new Error(`Future projection failed. Pro error: ${(err as Error).message}. Flash error: ${(fallbackErr as Error).message}`);
-      }
+    const data = await response.json();
+    const resultText = data?.choices?.[0]?.message?.content;
+    if (!resultText) {
+      throw new Error("Empty response from OpenRouter Structured Future Projection.");
     }
 
     const projections = JSON.parse(resultText);
