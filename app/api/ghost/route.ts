@@ -96,9 +96,13 @@ export async function POST(request: Request) {
     confusionLevel
   );
 
+  console.log("USER MESSAGE:", payload.message);
+  console.log("CALLING MODEL...");
+
   // ── Primary: Gemini 2.5 Pro via Google AI Studio ──────────────────────────
   try {
     const geminiResult = await callGeminiPrimary(payload, systemPrompt);
+    console.log("MODEL RESPONSE (Gemini):", geminiResult.text);
     return NextResponse.json({
       ...fallback,
       text: geminiResult.text,
@@ -114,6 +118,7 @@ export async function POST(request: Request) {
   // ── Fallback: DeepSeek-R1-Free via OpenRouter ─────────────────────────────
   try {
     const deepseekResult = await callOpenRouterDeepSeek(payload, systemPrompt);
+    console.log("MODEL RESPONSE (OpenRouter):", deepseekResult.text);
     return NextResponse.json({
       ...fallback,
       text: deepseekResult.text,
@@ -127,6 +132,7 @@ export async function POST(request: Request) {
   }
 
   // ── Last resort: local static template ───────────────────────────────────
+  console.log("MODEL RESPONSE (Local Fallback):", fallback.text);
   return NextResponse.json({
     ...fallback,
     insightCard: null,
@@ -134,6 +140,44 @@ export async function POST(request: Request) {
     confusionDetected: currentIsConfusion,
     providerTrace: ["local"],
   });
+}
+
+function cleanMessageHistory(messages: any[], currentMessage: string) {
+  if (!messages || messages.length === 0) {
+    return [{ role: "user", parts: [{ text: currentMessage }] }];
+  }
+
+  // 1. Map roles to user/model, drop empty text
+  const mapped = messages
+    .map((m: any) => ({
+      role: m.role === "ghost" ? "model" : "user",
+      text: m.text ? m.text.trim() : ""
+    }))
+    .filter((m: any) => m.text !== "");
+
+  // 2. Filter out leading model messages (Gemini requires first message to be user)
+  let firstUserIdx = mapped.findIndex((m: any) => m.role === "user");
+  if (firstUserIdx === -1) {
+    return [{ role: "user", parts: [{ text: currentMessage }] }];
+  }
+  const sliced = mapped.slice(firstUserIdx);
+
+  // 3. Merge consecutive messages with the same role
+  const alternating: any[] = [];
+  for (const m of sliced) {
+    if (alternating.length === 0) {
+      alternating.push({ role: m.role, parts: [{ text: m.text }] });
+    } else {
+      const last = alternating[alternating.length - 1];
+      if (last.role === m.role) {
+        last.parts[0].text += "\n" + m.text;
+      } else {
+        alternating.push({ role: m.role, parts: [{ text: m.text }] });
+      }
+    }
+  }
+
+  return alternating;
 }
 
 // ── Gemini 2.5 Pro via Google AI Studio ─────────────────────────────────────
@@ -150,13 +194,7 @@ async function callGeminiPrimary(
   if (!apiKey) throw new Error("No Google AI Studio key configured.");
 
   const runWithModel = async (model: string) => {
-    // Map messages history to Gemini format (role must be "user" or "model")
-    const contents = (payload.messages && payload.messages.length > 0)
-      ? payload.messages.map((m: any) => ({
-          role: m.role === "ghost" ? "model" : "user",
-          parts: [{ text: m.text }]
-        }))
-      : [{ role: "user", parts: [{ text: payload.message }] }];
+    const contents = cleanMessageHistory(payload.messages ?? [], payload.message);
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
