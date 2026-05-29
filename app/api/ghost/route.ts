@@ -87,6 +87,66 @@ Ye sab pata hai kyunki mai tu tha. Bas 10 saal aage.`;
   return lines.slice(0, 5).join("\n");
 }
 
+async function callFutureProjectionConversational(profile?: FutureSelfMemoryProfile): Promise<string> {
+  const apiKey = process.env.OPENROUTER_KEY;
+  if (!apiKey) throw new Error("No OpenRouter key configured.");
+
+  const prompt = `Based on this personality profile: ${JSON.stringify(profile)}
+
+Speak as the user's future self.
+Project their future in 3 short paragraphs. Hinglish.
+
+Paragraph 1 — 6 months if nothing changes:
+Reference their specific loops. Honest. Not harsh.
+
+Paragraph 2 — 2 years if one shift is made:
+Name the exact shift. What changes because of it.
+
+Paragraph 3 — 5 years highest version:
+Who they become. What it costs. Be honest not motivational.
+
+Rules:
+- Hinglish only
+- 3-4 sentences per paragraph max
+- No bullet points. No headers.
+- Reference specific patterns from profile
+- Sound like someone who watched this play out already`;
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://ghost-mentor-ai.vercel.app",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_PRIMARY_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "You are Ghost Mentor, speaking to your present-self. You are raw, honest, and speak from ten years ahead.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.75,
+      max_tokens: 600,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter Future Projection Error: ${err.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Empty response from OpenRouter Future Projection.");
+  }
+
+  return text.trim();
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GhostRequest>;
 
@@ -174,6 +234,36 @@ export async function POST(request: Request) {
       confusionDetected: false,
       providerTrace: ["local"],
     });
+  }
+
+  // ── Intercept future projection trigger ────────────────────────────────────
+  const futurePatterns = [
+    /project my future/i,
+    /mera future/i,
+    /future kya hoga/i,
+    /future dikhao/i,
+    /what.?s my future/i,
+    /future projection/i,
+    /mujhe future batao/i,
+  ];
+
+  const isFutureProjectionTrigger = futurePatterns.some((pattern) => pattern.test(payload.message));
+
+  if (isFutureProjectionTrigger) {
+    try {
+      const text = await callFutureProjectionConversational(payload.memoryProfile || fallback.updatedMemoryProfile);
+      console.log("MODEL RESPONSE (Intercepted - Future Projection):", text);
+      return NextResponse.json({
+        ...fallback,
+        text,
+        insightCard: null,
+        futureProjection: null,
+        confusionDetected: false,
+        providerTrace: ["gemini-primary"],
+      });
+    } catch (err) {
+      console.error("Future projection intercept failed:", err);
+    }
   }
 
   console.log("USER MESSAGE:", payload.message);
