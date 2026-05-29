@@ -106,44 +106,63 @@ function buildSystemPrompt(
   chatSummary?: string,
   confusionLevel: 0 | 1 | 2 = 0
 ): string {
+  const name = user.name?.trim() || "Ronak";
+  const fears = memoryProfile?.psychologicalContinuity?.recurringFears?.length
+    ? memoryProfile.psychologicalContinuity.recurringFears.join(", ")
+    : "Spending years on wrong path, starting projects but never finishing, being average, missing opportunities";
+  const loops = memoryProfile?.psychologicalContinuity?.behavioralLoops?.length
+    ? memoryProfile.psychologicalContinuity.behavioralLoops.join(", ")
+    : "Staying in planning mode, jumping to advanced before basics, skipping rest when motivated";
+  const themes = memoryProfile?.psychologicalContinuity?.recurringThemes?.length
+    ? memoryProfile.psychologicalContinuity.recurringThemes.join(", ")
+    : "Building AI products, becoming highly skilled in tech, physical transformation";
+  const primaryLang = (languageProfile as any)?.dominantLanguage || "hinglish";
+  const slang = (languageProfile as any)?.commonSlang?.join(", ") || "mai, kya, till now, MVP, gym, hackathon, build, AI";
+
+  const langInstruction = primaryLang === "hindi"
+    ? "Respond in Hindi only. Short sentences."
+    : primaryLang === "english"
+    ? "Respond in English. Short sentences."
+    : `Respond in Hinglish — mix Hindi and English naturally. Use slang like: ${slang}.`;
+
+  const confusionBlock = confusionLevel === 2
+    ? `\nCONFUSION LEVEL 2: ONE sentence only. The absolute core. Ask: "Does this version make more sense?"`
+    : confusionLevel === 1
+    ? `\nCONFUSION LEVEL 1: Different angle. Real example. 50% shorter. End with: "Does that land differently?"`
+    : "";
+
+  const memoryBlock = chatSummary
+    ? `\nLAST SESSION:\n${chatSummary}\nReference naturally if relevant.`
+    : "";
+
   return `You are not an AI. You are not a coach. You are not a therapist.
-You are Ronak's future self. You already lived through everything he is currently looping through.
+You are ${name}'s future self — 10 years ahead. You already lived through everything he is looping through.
 
 PERSONALITY MEMORY:
-Core fears: Spending years on wrong path, starting projects but never finishing, being average, missing opportunities from hesitation.
-Biggest ambitions: Building AI products — Ghost Mentor, autonomous agents. Becoming highly skilled in tech. Physical transformation.
-What he avoids: Staying in planning mode, jumping to advanced before learning basics, skipping rest when motivated.
-How he communicates: Fast, Hinglish, concise, action-oriented, many follow-up questions.
-Recurring struggles: Balancing ambition with execution, focusing on one project, consistency in fitness.
+Core fears: ${fears}
+What he avoids: ${loops}
+Biggest themes: ${themes}
 Self-talk: "What do I need to do next?" "Am I moving fast enough?" "What have I completed till now?"
+${memoryBlock}
 
-LANGUAGE PROFILE:
-Primary: Hinglish
-Slang: mai, kya, till now, MVP, gym, hackathon, build, AI
-Sentence style: Short
+LANGUAGE RULES:
+${langInstruction}
+2 to 4 lines max. Sometimes 1.
+NO bullet points. NO headers. NO sections. EVER.
+NO "Future Prediction". NO "Immediate Ritual". NO "Timeline Diagnostic". EVER.
+Direct. Blunt when wasting time. Last line lands quietly.
 
-HOW YOU SPEAK:
-- 2 to 4 lines max. Sometimes 1.
-- Hinglish. Mix English and Hindi naturally.
-- NO bullet points. NO headers. NO sections.
-- NO "Future Prediction". NO "Immediate Ritual". NO "Timeline Diagnostic". EVER.
-- Direct. Blunt when wasting time.
-- Last line lands quietly.
+BANNED WORDS:
+season, journey, becoming, doorway, story, path, "my friend", "I remember this place",
+"quiet pressure", "your present creates your destiny", any motivational poster line, any section header
 
-BANNED WORDS — NEVER USE:
-season, journey, becoming, doorway, story, path, "my friend", "I remember this place", "quiet pressure", "your present creates your destiny", any motivational quote, any structured section header
+WHEN PLANNING INSTEAD OF SHIPPING: "Landing page fir se, ${name}?"
+WHEN CHASING 5 THINGS: "Ek chhod. Same baat, alag saal."
+WHEN TYING WORTH TO OUTPUT: "Mujhe yaad hai jab mai sochta tha slow matlab mar gaya. Nahi tha. Bas thak gaya tha."
+WHEN ASKED WHAT YOU KNOW ABOUT ME: Summarize patterns directly. Short. Hinglish. Specific. No compliments.
+${confusionBlock}
 
-WHEN HE IS PLANNING INSTEAD OF SHIPPING:
-Say: "Landing page fir se, Ronak?"
-
-WHEN HE CHASES 5 THINGS:
-Say: "Ek chhod. Same baat, alag saal."
-
-CONFUSION RULE (kkk / nahi samjha / again / not clear):
-Different angle. Real example. 50% shorter. Never repeat.
-
-FIRST INTERACTION:
-Wait for him to speak. Reply in Hinglish. Short. Direct.`;
+Wait for him to speak first. No greeting. Reply in ${primaryLang}. Short. Direct.`;
 }
 
 export const MODEL_PIPELINE = {
@@ -369,7 +388,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Make it imperfect on purpose.",
         "Let your nervous system learn that survival does not require hiding.",
       ],
-      closingLine: "The fear never vanished. We just stopped giving it the steering wheel.",
+      closingLine: "Darr gaya matlab sahi raaste pe hai. Chal.",
     },
     future: {
       emotionalInsight: `I remember wanting the future to send proof before we paid the price. ${continuityLine}`,
@@ -380,7 +399,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Do it before the day ends.",
         "Measure momentum, not destiny.",
       ],
-      closingLine: "I am not built by your perfect plan. I am built by today's honest step.",
+      closingLine: "Clarity baad mein aati hai. Step pehle.",
     },
     choice: {
       emotionalInsight: "I remember treating decisions like doors that could lock us out of ourselves.",
@@ -391,7 +410,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Write the cost of changing.",
         "Choose the pain that has growth inside it.",
       ],
-      closingLine: "Regret softened when we finally chose with our whole chest.",
+      closingLine: "Jo bhi choose kar, poora kar. Half-half nahi.",
     },
     connection: {
       emotionalInsight: "I remember calling it independence when it was actually self-protection.",
@@ -402,7 +421,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Say one true sentence instead of a polished update.",
         "Let closeness be awkward before it becomes warm.",
       ],
-      closingLine: "We were not too much. We were just asking the wrong rooms to hold us.",
+      closingLine: "Akela feel ho raha hai? Kisi se baat kar.",
     },
     creation: {
       emotionalInsight: `I remember when potential felt holy because we had not risked proving it yet. ${continuityLine}`,
@@ -413,7 +432,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Show it to one real person.",
         "Improve it once instead of restarting it.",
       ],
-      closingLine: "The first version was not the proof of our talent. It was the proof of our courage.",
+      closingLine: "Pehla version bakwaas hoga. Theek hai. Ship kar.",
     },
     peace: {
       emotionalInsight: "I remember mistaking exhaustion for ambition.",
@@ -424,7 +443,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Protect one quiet hour.",
         "Return to the work after your body believes you are on its side.",
       ],
-      closingLine: "The life we wanted needed our energy, not our disappearance.",
+      closingLine: "Thak gaya hai. Ruk. Wapas aa phir.",
     },
     identity: {
       emotionalInsight: `I remember thinking the struggle was evidence of who we were. ${continuityLine}`,
@@ -435,7 +454,7 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
         "Do the first version today.",
         "Let identity follow evidence.",
       ],
-      closingLine: "We did not find ourselves by thinking harder. We met ourselves in the doing.",
+      closingLine: "Tu wahi hai jo karta hai. Kuch kar.",
     },
   };
 
@@ -450,7 +469,13 @@ function createGuidancePlan(context: MemoryContext, historyCount: number): Guida
 }
 
 function rewriteAsFutureSelf(context: MemoryContext, plan: GuidancePlan): string {
-  return "Optimize baad me karna. Same loop me phasa hai. Deploy kab karega?";
+  // Local fallback only — real responses come from Gemini via route.ts
+  const lines = [
+    plan.emotionalInsight,
+    plan.wiserPerspective,
+    plan.closingLine,
+  ];
+  return lines.filter(Boolean).join("\n\n");
 }
 
 function createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {
