@@ -32,6 +32,61 @@ const OPENROUTER_PRIMARY_MODEL = "google/gemini-2.5-pro-exp";
 // Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-r1";
 
+function buildAboutMeResponse(profile?: FutureSelfMemoryProfile): string {
+  const fallbackMsg = `Tu planning mein rehta hai. 
+Implementation se bhaagta hai.
+MVP banata hai, deploy nahi karta.
+Ye sab pata hai kyunki mai tu tha. Bas 10 saal aage.`;
+
+  if (!profile) return fallbackMsg;
+
+  const identity = profile.identity;
+  const continuity = profile.psychologicalContinuity;
+
+  const lines: string[] = [];
+
+  // 1. Core Fear / Decision Loop
+  if (identity?.decisionPattern && identity.decisionPattern !== "still being learned") {
+    lines.push(`Tu ${identity.decisionPattern.toLowerCase()} mein rehta hai.`);
+  } else if (continuity?.behavioralLoops && continuity.behavioralLoops.length > 0) {
+    const firstLoop = continuity.behavioralLoops[0].replace(/\.$/, "");
+    lines.push(`Tu ${firstLoop.toLowerCase()} mein rehta hai.`);
+  } else {
+    lines.push("Tu planning mein rehta hai.");
+  }
+
+  // 2. Struggle / Core Avoidance
+  if (profile.identity?.coreFear && profile.identity.coreFear !== "not enough emotional history yet") {
+    lines.push(`Darr lagta hai ki ${profile.identity.coreFear.toLowerCase()}.`);
+  } else if (continuity?.recurringFears && continuity.recurringFears.length > 0) {
+    const firstFear = continuity.recurringFears[0].replace(/\.$/, "");
+    lines.push(`Avoid karta hai kyunki darr hai ki ${firstFear.toLowerCase()}.`);
+  } else {
+    lines.push("Implementation se bhaagta hai.");
+  }
+
+  // 3. Behavioral Loop / Pattern
+  if (continuity?.behavioralLoops && continuity.behavioralLoops.length > 1) {
+    const secondLoop = continuity.behavioralLoops[1].replace(/\.$/, "");
+    lines.push(`${secondLoop}.`);
+  } else {
+    lines.push("MVP banata hai, deploy nahi karta.");
+  }
+
+  // 4. EEvolution/Discipline or fallback
+  if (continuity?.growthPatterns && continuity.growthPatterns.length > 0) {
+    const growth = continuity.growthPatterns[0].replace(/\.$/, "");
+    lines.push(`Kabhi try karta hai ${growth.toLowerCase()}, par consistency nahi.`);
+  } else {
+    lines.push("Fitness bhi start karta hai, consistency nahi.");
+  }
+
+  // 5. Ghost Mentor Signature End
+  lines.push("Ye sab pata hai kyunki mai tu tha. Bas 10 saal aage.");
+
+  return lines.slice(0, 5).join("\n");
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GhostRequest>;
 
@@ -95,6 +150,31 @@ export async function POST(request: Request) {
     chatSummary,
     confusionLevel
   );
+
+  // ── Intercept "What do you know about me" patterns ────────────────────────
+  const knowMePatterns = [
+    /what do you know about me/i,
+    /mera kya pata hai/i,
+    /tu mujhe jaanta hai/i,
+    /tell me what you know/i,
+    /abt me/i,
+    /about me/i,
+  ];
+
+  const isKnowMeTrigger = knowMePatterns.some((pattern) => pattern.test(payload.message));
+
+  if (isKnowMeTrigger) {
+    const text = buildAboutMeResponse(payload.memoryProfile || fallback.updatedMemoryProfile);
+    console.log("MODEL RESPONSE (Intercepted - Know Me):", text);
+    return NextResponse.json({
+      ...fallback,
+      text,
+      insightCard: null,
+      futureProjection: null,
+      confusionDetected: false,
+      providerTrace: ["local"],
+    });
+  }
 
   console.log("USER MESSAGE:", payload.message);
   console.log("CALLING MODEL...");
