@@ -9,6 +9,7 @@ import SmartOnboardingScreen from "@/components/SmartOnboardingScreen";
 import VoiceCloneScreen from "@/components/VoiceCloneScreen";
 import ChatScreen from "@/components/ChatScreen";
 import FutureProjectionScreen from "@/components/FutureProjectionScreen";
+import PatternAnalyzer from "@/components/PatternAnalyzer";
 
 function AppScreens() {
   const { state, goToScreen } = useApp();
@@ -102,6 +103,19 @@ function AppScreens() {
           className="flex-1"
         >
           <FutureProjectionScreen onComplete={handleFutureProjectionComplete} />
+        </motion.div>
+      )}
+
+      {state.screen === "analyzer" && (
+        <motion.div
+          key="analyzer"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.5 }}
+          className="flex-1"
+        >
+          <PatternAnalyzer />
         </motion.div>
       )}
     </AnimatePresence>

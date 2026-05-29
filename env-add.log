@@ -1,0 +1,7 @@
+Retrieving project…
+Retrieving project…
+Saving
+Overrode Environment Variable GEMINI_API_KEY to Project ghost-mentor-ai [409ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`

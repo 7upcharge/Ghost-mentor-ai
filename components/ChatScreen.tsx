@@ -614,6 +614,24 @@ export default function ChatScreen() {
           >
             End Session
           </motion.button>
+
+          <motion.button
+            onClick={() => goToScreen("analyzer")}
+            whileHover={{ opacity: 0.85, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border transition-all duration-200 cursor-pointer hidden sm:flex items-center gap-1.5"
+            style={{
+              color: "rgba(157,157,170,0.65)",
+              borderColor: "rgba(255,255,255,0.06)",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            Analyze
+          </motion.button>
           
           <motion.button
             onClick={handleReset}

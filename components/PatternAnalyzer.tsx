@@ -572,7 +572,7 @@ export default function PatternAnalyzer() {
   }, []);
 
   const handleBack = useCallback(() => {
-    goToScreen("landing");
+    goToScreen("chat");
   }, [goToScreen]);
 
   const charCount = text.trim().length;
