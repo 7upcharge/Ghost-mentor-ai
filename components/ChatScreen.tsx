@@ -509,6 +509,22 @@ export default function ChatScreen() {
     [state.user, state.memoryProfile, state.messages, state.languageProfile, state.isThinking, isTypingGhost, confusionCount, dispatch, scrollToBottom]
   );
 
+  const handleNewChat = useCallback(() => {
+    if (state.isThinking || isTypingGhost) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    dispatch({ type: "SET_MESSAGES", messages: [] });
+    greetingTriggeredRef.current = false;
+    greetingSequenceActiveRef.current = false;
+    setConfusionCount(0);
+    setOrbState("idle");
+    setThinkingStepIndex(-1);
+  }, [state.isThinking, isTypingGhost, dispatch]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -680,6 +696,29 @@ export default function ChatScreen() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </motion.button>
+          
+          {/* New Chat */}
+          <motion.button
+            onClick={handleNewChat}
+            disabled={state.isThinking || isTypingGhost}
+            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.35 : 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="hidden md:flex text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 text-ghost-accent-light/95 transition-all duration-200 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+          >
+            New Chat
+          </motion.button>
+          <motion.button
+            onClick={handleNewChat}
+            disabled={state.isThinking || isTypingGhost}
+            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.35 : 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 text-ghost-accent-light/95 transition-all duration-200 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+            title="New Chat"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </motion.button>
           
