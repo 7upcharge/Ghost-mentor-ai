@@ -31,8 +31,8 @@ interface ProviderTextResponse {
 }
 
 // ── Model constants ──────────────────────────────────────────────────────────
-// Primary: Gemini 2.5 Pro Exp via OpenRouter
-const OPENROUTER_PRIMARY_MODEL = "google/gemini-2.5-pro-exp";
+// Primary: Llama 3.3 70b Instruct via OpenRouter
+const OPENROUTER_PRIMARY_MODEL = "meta-llama/llama-3.3-70b-instruct";
 
 // Fallback: DeepSeek-R1 via OpenRouter (Prompt Pack spec)
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-r1";

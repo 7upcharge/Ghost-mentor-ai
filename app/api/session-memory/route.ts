@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
-const OPENROUTER_MODEL = "google/gemini-2.5-pro-exp";
+const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct";
 
 export async function POST(request: Request) {
   try {

@@ -172,7 +172,7 @@ function CategoryPanel({
                 style={{ background: cfg.accent, boxShadow: `0 0 4px ${cfg.accent}` }}
               />
               <p
-                className="text-[13.5px] font-light leading-relaxed"
+                className="text-[14px] md:text-[16px] font-light leading-relaxed"
                 style={{ color: "rgba(240,240,244,0.82)" }}
               >
                 {item}
@@ -247,7 +247,7 @@ function CommunicationPanel({
           >
             Overall Tone
           </p>
-          <p className="text-[13.5px] font-light leading-relaxed" style={{ color: "rgba(240,240,244,0.85)" }}>
+          <p className="text-[14px] md:text-[16px] font-light leading-relaxed" style={{ color: "rgba(240,240,244,0.85)" }}>
             {data.overallTone}
           </p>
         </div>
@@ -263,7 +263,7 @@ function CommunicationPanel({
                 {row.label}
               </span>
               <p
-                className="text-[13px] font-light leading-relaxed"
+                className="text-[14px] md:text-[16px] font-light leading-relaxed"
                 style={{ color: "rgba(240,240,244,0.72)" }}
               >
                 {row.value}
