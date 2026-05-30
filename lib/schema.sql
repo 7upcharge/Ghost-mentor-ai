@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   user_id            TEXT PRIMARY KEY,
   name               TEXT,
   voice_id           TEXT,
+  voice_preference   TEXT DEFAULT 'text',
+  elevenlabs_chars_used INT DEFAULT 0,
 
   -- Prompt 15: Session continuity
   chat_summary       TEXT,                  -- 3-sentence session summary (Prompt 8)

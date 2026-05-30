@@ -13,6 +13,7 @@ import ChatScreen from "@/components/ChatScreen";
 import FutureProjectionScreen from "@/components/FutureProjectionScreen";
 import PatternAnalyzer from "@/components/PatternAnalyzer";
 import GhostOrb from "@/components/GhostOrb";
+import VoicePreferenceScreen from "@/components/VoicePreferenceScreen";
 
 function AppScreens() {
   const { state, dispatch, goToScreen } = useApp();
@@ -44,7 +45,7 @@ function AppScreens() {
       try {
         const { data } = await supabase
           .from("user_profiles")
-          .select("personality_profile, chat_summary, name, voice_id, language_profile")
+          .select("personality_profile, chat_summary, name, voice_id, voice_preference, elevenlabs_chars_used, language_profile")
           .eq("user_id", sessionUser.id)
           .single();
 
@@ -59,6 +60,12 @@ function AppScreens() {
           }
           if (data.voice_id) {
             dispatch({ type: "SET_VOICE_ID", voiceId: data.voice_id });
+          }
+          if (data.voice_preference) {
+            dispatch({ type: "SET_VOICE_PREFERENCE", preference: data.voice_preference as any });
+          }
+          if (data.elevenlabs_chars_used !== undefined) {
+            dispatch({ type: "SET_ELEVENLABS_CHARS_USED", charsUsed: data.elevenlabs_chars_used });
           }
           if (data.chat_summary) {
             dispatch({ type: "SET_CHAT_SUMMARY", chatSummary: data.chat_summary });
@@ -83,7 +90,16 @@ function AppScreens() {
           });
 
           dispatch({ type: "SET_MESSAGES", messages: formattedMessages });
-          goToScreen("chat");
+          
+          if (data.voice_preference) {
+            if (data.voice_preference === "own" && !data.voice_id) {
+              goToScreen("voice-clone");
+            } else {
+              goToScreen("chat");
+            }
+          } else {
+            goToScreen("voice-preference");
+          }
         } else {
           // New user - automatically register default profile details
           const defaultProfile = createEmptyFutureSelfMemoryProfile();
@@ -106,6 +122,8 @@ function AppScreens() {
               transfer_sources: [],
               last_active: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              voice_preference: null,
+              elevenlabs_chars_used: 0,
             },
             { onConflict: "user_id" }
           );
@@ -114,7 +132,9 @@ function AppScreens() {
           dispatch({ type: "SET_LANGUAGE_PROFILE", languageProfile: defaultLangProfile });
           dispatch({ type: "SET_USER_NAME", name: session.user?.name || "Ghost User" });
           dispatch({ type: "SET_MESSAGES", messages: [] });
-          goToScreen("chat");
+          dispatch({ type: "SET_VOICE_PREFERENCE", preference: null as any });
+          dispatch({ type: "SET_ELEVENLABS_CHARS_USED", charsUsed: 0 });
+          goToScreen("voice-preference");
         }
       } catch (err) {
         console.error("Failed to query user profile:", err);
@@ -123,7 +143,7 @@ function AppScreens() {
         dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: defaultProfile });
         dispatch({ type: "SET_USER_NAME", name: session.user?.name || "Ghost User" });
         dispatch({ type: "SET_MESSAGES", messages: [] });
-        goToScreen("chat");
+        goToScreen("voice-preference");
       } finally {
         setProfileChecked(true);
         setCheckingProfile(false);
@@ -214,6 +234,27 @@ function AppScreens() {
           className="flex-1"
         >
           <SmartOnboardingScreen onComplete={handleSmartOnboardingComplete} />
+        </motion.div>
+      )}
+
+      {state.screen === "voice-preference" && (
+        <motion.div
+          key="voice-preference"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.5 }}
+          className="flex-1"
+        >
+          <VoicePreferenceScreen
+            onComplete={(pref) => {
+              if (pref === "own") {
+                goToScreen("voice-clone");
+              } else {
+                goToScreen("chat");
+              }
+            }}
+          />
         </motion.div>
       )}
 

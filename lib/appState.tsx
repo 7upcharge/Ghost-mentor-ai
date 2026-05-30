@@ -37,6 +37,8 @@ export interface UserProfile {
   currentStruggle: string;
   voiceId?: string | null;
   chatSummary?: string | null;
+  voicePreference?: "own" | "ai" | "text" | null;
+  elevenlabsCharsUsed?: number;
 }
 
 export interface FutureSelfMemoryProfile {
@@ -66,7 +68,7 @@ export interface FutureSelfMemoryProfile {
   };
 }
 
-export type Screen = "landing" | "memory-transfer" | "smart-onboarding" | "onboarding" | "voice-clone" | "chat" | "analyzer" | "future-projection";
+export type Screen = "landing" | "memory-transfer" | "smart-onboarding" | "onboarding" | "voice-clone" | "chat" | "analyzer" | "future-projection" | "voice-preference";
 
 export interface TransferSource {
   platform: "chatgpt" | "claude" | "gemini" | "grok" | "perplexity" | "manual";
@@ -128,6 +130,8 @@ type Action =
   | { type: "SET_THINKING"; isThinking: boolean }
   | { type: "SET_USER_ID"; id: string }
   | { type: "SET_VOICE_ID"; voiceId: string }
+  | { type: "SET_VOICE_PREFERENCE"; preference: "own" | "ai" | "text" }
+  | { type: "SET_ELEVENLABS_CHARS_USED"; charsUsed: number }
   | { type: "SET_LANGUAGE_PROFILE"; languageProfile: LanguageProfileState }
   | { type: "SET_TRANSFER_SOURCES"; transferSources: TransferSource[] }
   | { type: "SET_CONFIDENCE_SCORE"; score: number }
@@ -179,6 +183,8 @@ const initialState: AppState = {
     aspiration: "",
     currentStruggle: "",
     voiceId: null,
+    voicePreference: null,
+    elevenlabsCharsUsed: 0,
   },
   messages: [],
   memoryProfile: createEmptyFutureSelfMemoryProfile(),
@@ -245,6 +251,10 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, user: { ...state.user, id: action.id } };
     case "SET_VOICE_ID":
       return { ...state, user: { ...state.user, voiceId: action.voiceId } };
+    case "SET_VOICE_PREFERENCE":
+      return { ...state, user: { ...state.user, voicePreference: action.preference } };
+    case "SET_ELEVENLABS_CHARS_USED":
+      return { ...state, user: { ...state.user, elevenlabsCharsUsed: action.charsUsed } };
     case "SET_CHAT_SUMMARY":
       return { ...state, user: { ...state.user, chatSummary: action.chatSummary } };
     case "ADD_MESSAGE":
@@ -319,6 +329,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (parsed.aspiration) dispatch({ type: "SET_USER_ASPIRATION", aspiration: parsed.aspiration });
           if (parsed.currentStruggle) dispatch({ type: "SET_USER_STRUGGLE", struggle: parsed.currentStruggle });
           if (parsed.voiceId) dispatch({ type: "SET_VOICE_ID", voiceId: parsed.voiceId });
+          if (parsed.voicePreference) dispatch({ type: "SET_VOICE_PREFERENCE", preference: parsed.voicePreference });
+          if (parsed.elevenlabsCharsUsed !== undefined) dispatch({ type: "SET_ELEVENLABS_CHARS_USED", charsUsed: parsed.elevenlabsCharsUsed });
         }
       } catch {
         window.localStorage.removeItem(MEMORY_STORAGE_KEY);

@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       await supabase.from("user_profiles").upsert({
         user_id: userId,
         voice_id: voiceId,
+        voice_preference: "own",
         name: name,
         created_at: new Date().toISOString()
       }, { onConflict: "user_id" });

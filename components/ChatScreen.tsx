@@ -12,6 +12,7 @@ import {
 } from "@/lib/simulationEngine";
 import GhostOrb, { OrbState } from "./GhostOrb";
 import GlowButton from "./GlowButton";
+import { supabase } from "@/lib/supabaseClient";
 
 // Film grain
 function GrainOverlay() {
@@ -271,6 +272,37 @@ export default function ChatScreen() {
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [confusionCount, setConfusionCount] = useState(0);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [voiceLimitReached, setVoiceLimitReached] = useState(false);
+
+  const toggleMute = useCallback(async () => {
+    const isCurrentlyMuted = state.user.voicePreference === "text";
+    let nextPreference: "own" | "ai" | "text" = "text";
+    
+    if (isCurrentlyMuted) {
+      nextPreference = state.user.voiceId ? "own" : "ai";
+    }
+
+    if (state.user.id) {
+      try {
+        await supabase
+          .from("user_profiles")
+          .update({ voice_preference: nextPreference })
+          .eq("user_id", state.user.id);
+      } catch (err) {
+        console.error("Failed to save voice preference toggle:", err);
+      }
+    }
+
+    dispatch({ type: "SET_VOICE_PREFERENCE", preference: nextPreference });
+
+    if (nextPreference === "text" && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+      setOrbState("idle");
+    }
+  }, [state.user.voicePreference, state.user.voiceId, state.user.id, dispatch]);
+
+  const isMuted = state.user.voicePreference === "text";
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -289,26 +321,56 @@ export default function ChatScreen() {
   ];
 
   const playGhostResponse = useCallback((text: string, onComplete: () => void) => {
-    if (state.user.voiceId) {
-      const audioUrl = `/api/elevenlabs/tts?text=${encodeURIComponent(text)}&voiceId=${state.user.voiceId}`;
-      const audio = new window.Audio(audioUrl);
-      audioRef.current = audio;
-      
-      audio.onended = () => {
-        onComplete();
-      };
-      
-      audio.play().catch((err) => {
-        console.error("Audio playback failed", err);
-        onComplete();
-      });
-      
-      return (text.length / 15) * 1000; // ~15 chars/sec
-    } else {
-      setTimeout(onComplete, (text.length / 30) * 1000);
-      return (text.length / 30) * 1000;
+    const pref = state.user.voicePreference;
+    const isTextOnly = pref === "text";
+    const isTooLong = text.length > 300;
+    const charsUsed = state.user.elevenlabsCharsUsed || 0;
+    const isLimit = charsUsed >= 9000;
+
+    if (isLimit && !voiceLimitReached) {
+      setVoiceLimitReached(true);
     }
-  }, [state.user.voiceId]);
+
+    if (isTextOnly || isTooLong || isLimit) {
+      const duration = (text.length / 30) * 1000;
+      setTimeout(onComplete, duration);
+      return duration;
+    }
+
+    const voiceId = pref === "own" && state.user.voiceId
+      ? state.user.voiceId
+      : "21m00Tcm4TlvDq8ikWAM";
+
+    const audioUrl = `/api/elevenlabs/tts?text=${encodeURIComponent(text)}&voiceId=${voiceId}&userId=${state.user.id}&preference=${pref}`;
+    const audio = new window.Audio(audioUrl);
+    audioRef.current = audio;
+
+    setOrbState("speaking");
+
+    audio.onended = () => {
+      setOrbState("idle");
+      onComplete();
+    };
+
+    audio.onerror = () => {
+      console.error("Audio playback error");
+      setOrbState("idle");
+      onComplete();
+    };
+
+    audio.play().catch((err) => {
+      console.error("Audio play failed", err);
+      setOrbState("idle");
+      onComplete();
+    });
+
+    dispatch({
+      type: "SET_ELEVENLABS_CHARS_USED",
+      charsUsed: charsUsed + text.length
+    });
+
+    return (text.length / 15) * 1000;
+  }, [state.user.voicePreference, state.user.voiceId, state.user.elevenlabsCharsUsed, state.user.id, voiceLimitReached, dispatch]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (scrollContainerRef.current) {
@@ -317,6 +379,15 @@ export default function ChatScreen() {
         behavior,
       });
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -353,24 +424,29 @@ export default function ChatScreen() {
 
         const durationMs = playGhostResponse(initGreeting.text, () => {
           setIsTypingGhost(false);
+          dispatch({
+            type: "UPDATE_LAST_GHOST_MESSAGE",
+            text: initGreeting.text,
+          });
+          scrollToBottom();
         });
 
         setIsTypingGhost(true);
-        let idx = 0;
-        activeGhostTextRef.current = "";
-        const intervalTime = Math.max(15, durationMs / initGreeting.text.length);
+        const greetingWords = initGreeting.text.split(" ");
+        let wordIdx = 0;
+        const intervalTime = Math.max(20, durationMs / greetingWords.length);
 
         const interval = setInterval(() => {
-          if (idx <= initGreeting.text.length) {
-            activeGhostTextRef.current = initGreeting.text.slice(0, idx);
+          if (wordIdx < greetingWords.length) {
+            const partial = greetingWords.slice(0, wordIdx + 1).join(" ");
             dispatch({
               type: "UPDATE_LAST_GHOST_MESSAGE",
-              text: activeGhostTextRef.current,
+              text: partial,
             });
-            idx += 1;
+            wordIdx++;
+            scrollToBottom("auto");
           } else {
             clearInterval(interval);
-            scrollToBottom();
           }
         }, intervalTime);
       }, 0);
@@ -476,35 +552,41 @@ export default function ChatScreen() {
 
       setThinkingStepIndex(-1);
       dispatch({ type: "SET_THINKING", isThinking: false });
-      setOrbState("speaking");
-
+      setIsTypingGhost(true);
       const ghostMsgId = Math.random().toString();
       dispatch({
         type: "ADD_MESSAGE",
         message: { id: ghostMsgId, role: "ghost", text: "", timestamp: Date.now() },
       });
 
-      // Word-by-word streaming: 0.05s stagger per word (Prompt spec)
-      const words = response.text.split(" ");
+      const durationMs = playGhostResponse(response.text, () => {
+        setIsTypingGhost(false);
+        dispatch({
+          type: "UPDATE_LAST_GHOST_MESSAGE",
+          text: response.text,
+          insightCard: response.insightCard,
+          futureProjection: response.futureProjection,
+        });
+        scrollToBottom();
+      });
+
+      const responseWords = response.text.split(" ");
       let wordIdx = 0;
-      const wordInterval = setInterval(() => {
-        if (wordIdx < words.length) {
-          const partial = words.slice(0, wordIdx + 1).join(" ");
-          dispatch({ type: "UPDATE_LAST_GHOST_MESSAGE", text: partial });
-          wordIdx++;
-        } else {
-          clearInterval(wordInterval);
+      const intervalTime = Math.max(20, durationMs / responseWords.length);
+
+      const interval = setInterval(() => {
+        if (wordIdx < responseWords.length) {
+          const partial = responseWords.slice(0, wordIdx + 1).join(" ");
           dispatch({
             type: "UPDATE_LAST_GHOST_MESSAGE",
-            text: response.text,
-            insightCard: response.insightCard,
-            futureProjection: response.futureProjection,
+            text: partial,
           });
-          setIsTypingGhost(false);
-          setOrbState("idle");
-          scrollToBottom();
+          wordIdx++;
+          scrollToBottom("auto");
+        } else {
+          clearInterval(interval);
         }
-      }, 50); // 50ms per word ≈ 0.05s stagger
+      }, intervalTime);
 
     },
     [state.user, state.memoryProfile, state.messages, state.languageProfile, state.isThinking, isTypingGhost, confusionCount, dispatch, scrollToBottom]
@@ -524,6 +606,7 @@ export default function ChatScreen() {
     setConfusionCount(0);
     setOrbState("idle");
     setThinkingStepIndex(-1);
+    setVoiceLimitReached(false);
   }, [state.isThinking, isTypingGhost, dispatch]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -540,6 +623,11 @@ export default function ChatScreen() {
   };
 
   const handleEndSession = useCallback(async () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
     if (state.messages.length <= 1) {
       goToScreen("landing");
       return;
@@ -674,6 +762,39 @@ export default function ChatScreen() {
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
+          </motion.button>
+
+          {/* Speaker Mute/Unmute Toggle */}
+          <motion.button
+            onClick={toggleMute}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="hidden md:flex items-center gap-1.5 text-[14px] font-medium tracking-wide px-4 py-2 rounded-full border text-ghost-text transition-all duration-200 cursor-pointer"
+            style={{ background: "rgba(255, 255, 255, 0.1)", borderColor: "rgba(255, 255, 255, 0.3)" }}
+          >
+            <motion.span
+              animate={orbState === "speaking" ? { scale: [1, 1.25, 1] } : {}}
+              transition={{ repeat: Infinity, duration: 0.8 }}
+            >
+              {isMuted ? "🔇" : "🔊"}
+            </motion.span>
+            <span>{isMuted ? "Muted" : "Voice"}</span>
+          </motion.button>
+          <motion.button
+            onClick={toggleMute}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border text-ghost-text transition-all duration-200 cursor-pointer"
+            style={{ background: "rgba(255, 255, 255, 0.1)", borderColor: "rgba(255, 255, 255, 0.3)" }}
+            title={isMuted ? "Unmute Voice" : "Mute Voice"}
+          >
+            <motion.span
+              className="text-[18px]"
+              animate={orbState === "speaking" ? { scale: [1, 1.25, 1] } : {}}
+              transition={{ repeat: Infinity, duration: 0.8 }}
+            >
+              {isMuted ? "🔇" : "🔊"}
+            </motion.span>
           </motion.button>
 
           {/* Timeline Memory Drawer Toggle */}
@@ -845,25 +966,32 @@ export default function ChatScreen() {
 
                     {/* Message bubble */}
                     {isGhost ? (
-                      <div
-                        className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[16px] md:text-[18px] max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
-                        style={{
-                          background: "rgba(15, 15, 22, 0.72)",
-                          backdropFilter: "blur(16px)",
-                          WebkitBackdropFilter: "blur(16px)",
-                          border: "1px solid rgba(255,255,255,0.065)",
-                          padding: "16px 20px",
-                          boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
-                        }}
-                      >
-                        {message.text}
-                        {isGhost && isLastMessage && isTypingGhost && (
-                          <span
-                            className="inline-block w-[1.5px] h-[1em] align-middle ml-[3px] bg-ghost-accent translate-y-[-0.05em]"
-                            style={{ animation: "cursor-blink 1s step-end infinite" }}
-                          />
+                      <>
+                        <div
+                          className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[16px] md:text-[18px] max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
+                          style={{
+                            background: "rgba(15, 15, 22, 0.72)",
+                            backdropFilter: "blur(16px)",
+                            WebkitBackdropFilter: "blur(16px)",
+                            border: "1px solid rgba(255,255,255,0.065)",
+                            padding: "16px 20px",
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
+                          }}
+                        >
+                          {message.text}
+                          {isGhost && isLastMessage && isTypingGhost && (
+                            <span
+                              className="inline-block w-[1.5px] h-[1em] align-middle ml-[3px] bg-ghost-accent translate-y-[-0.05em]"
+                              style={{ animation: "cursor-blink 1s step-end infinite" }}
+                            />
+                          )}
+                        </div>
+                        {isGhost && (state.user.voicePreference === "own" || state.user.voicePreference === "ai") && message.text.length > 300 && (
+                          <span className="text-[10px] text-ghost-muted mt-1.5 px-2 select-none">
+                            🔇 Long response — text only
+                          </span>
                         )}
-                      </div>
+                      </>
                     ) : (
                       <p
                         className="text-[16px] md:text-[18px] font-light leading-relaxed text-right max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
@@ -935,6 +1063,20 @@ export default function ChatScreen() {
                     {seed}
                   </motion.button>
                 ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Voice limit warning */}
+          <AnimatePresence>
+            {voiceLimitReached && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                className="w-full text-center px-4 py-2 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 text-[11px] font-light tracking-wide leading-relaxed animate-fade-in"
+              >
+                ⚠️ Voice limit reached for this month. Upgrade for unlimited voice.
               </motion.div>
             )}
           </AnimatePresence>
