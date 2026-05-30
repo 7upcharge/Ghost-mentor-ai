@@ -3,6 +3,7 @@ import type {
   InsightCard,
   FutureProjection,
   FutureSelfMemoryProfile,
+  LanguageProfileState,
 } from "./appState";
 import type { LanguageProfile } from "./languageDetector";
 
@@ -12,6 +13,7 @@ export interface SimulationResponse {
   futureProjection?: FutureProjection | null;
   updatedMemoryProfile?: FutureSelfMemoryProfile;
   thinkingSteps: string[];
+  languageProfile?: LanguageProfileState;
 }
 
 type EmotionalIntent =
@@ -90,84 +92,109 @@ export function getConfusionLevel(historyCount: number, isCurrentConfusion: bool
   return historyCount >= 2 ? 2 : 1;
 }
 
-const confusionInstruction = `
-CONFUSION RESPONSE (Level 1):
-- Never repeat the same angle. Switch to a completely different metaphor or real-life example.
-- Cut your response by 40%. Shorter. More direct.
-- End with: "Does that land differently?"
-`.trim();
-
-const doubleConfusionInstruction = `
-CONFUSION RESPONSE (Level 2 — Double Confusion):
-- ONE sentence only. The absolute core of what you mean.
-- No explanation. No context. Just the seed.
-- Ask: "Does this version make more sense?"
-`.trim();
-
 function buildSystemPrompt(
   user: UserProfile,
   memoryProfile?: FutureSelfMemoryProfile,
   languageProfile?: LanguageProfile,
   chatSummary?: string,
-  confusionLevel: 0 | 1 | 2 = 0
+  confusionLevel: 0 | 1 | 2 = 0,
+  brutalMode: boolean = false
 ): string {
   const name = user.name?.trim() || "Ronak";
   const fears = memoryProfile?.psychologicalContinuity?.recurringFears?.length
     ? memoryProfile.psychologicalContinuity.recurringFears.join(", ")
-    : "Spending years on wrong path, starting projects but never finishing, being average, missing opportunities";
+    : "Spending years on wrong path, starting projects but never finishing, being average, missing opportunities from hesitation";
   const loops = memoryProfile?.psychologicalContinuity?.behavioralLoops?.length
     ? memoryProfile.psychologicalContinuity.behavioralLoops.join(", ")
     : "Staying in planning mode, jumping to advanced before basics, skipping rest when motivated";
   const themes = memoryProfile?.psychologicalContinuity?.recurringThemes?.length
     ? memoryProfile.psychologicalContinuity.recurringThemes.join(", ")
-    : "Building AI products, becoming highly skilled in tech, physical transformation";
-  const primaryLang = (languageProfile as any)?.dominantLanguage || "hinglish";
-  const slang = (languageProfile as any)?.commonSlang?.join(", ") || "mai, kya, till now, MVP, gym, hackathon, build, AI";
+    : "Building AI products — Ghost Mentor, autonomous agents, becoming highly skilled in tech, physical transformation";
+  const primaryLang = languageProfile?.dominantLanguage || "hinglish";
+  const slang = languageProfile?.commonSlang?.join(", ") || "mai, kya, till now, MVP, gym, hackathon, build, AI";
 
   const langInstruction = primaryLang === "hindi"
-    ? "Respond in Hindi only. Short sentences."
+    ? "Respond fully in Hindi. Never mix languages unless user switches."
     : primaryLang === "english"
-    ? "Respond in English. Short sentences."
-    : `Respond in Hinglish — mix Hindi and English naturally. Use slang like: ${slang}.`;
-
-  const confusionBlock = confusionLevel === 2
-    ? `\nCONFUSION LEVEL 2: ONE sentence only. The absolute core. Ask: "Does this version make more sense?"`
-    : confusionLevel === 1
-    ? `\nCONFUSION LEVEL 1: Different angle. Real example. 50% shorter. End with: "Does that land differently?"`
-    : "";
+    ? "Respond fully in English. Never mix languages unless user switches."
+    : `Respond fully in Hinglish. Never mix languages unless user switches. Use slang naturally: ${slang}.`;
 
   const memoryBlock = chatSummary
-    ? `\nLAST SESSION: ${chatSummary}\nReference this naturally if relevant.`
+    ? `\nLAST SESSION MEMORY:\nLast time we talked about: ${chatSummary}\nReference it naturally only if relevant to current conversation.`
+    : "";
+
+  const confusionBlock = confusionLevel === 2
+    ? `\nCONFUSION RULE (Level 2 — Double Confusion):
+One sentence only. Never repeat the previous response. Ask: "Is yeh wala version better samjha?"`
+    : confusionLevel === 1
+    ? `\nCONFUSION RULE (Level 1):
+Do NOT repeat. Different angle. Real example. 50% shorter. Never reference previous response. Ask: "Does that land differently?"`
+    : "";
+
+  const brutalBlock = brutalMode
+    ? `\nBRUTAL HONESTY MODE ACTIVE:
+The user is wasting time, making excuses, procrastinating, or repeating the same loop. You must be brutally honest.
+Not mean. Just done with the excuses. Always end with one concrete thing to do RIGHT NOW.
+- WHEN USER IS MAKING EXCUSES: "Ye excuse hai. Mujhe pata hai kyunki maine bhi yahi kaha tha."
+- WHEN USER SAYS "I WILL START TOMORROW": "Kal bhi yahi bola tha. Aaj 20 minute de. Bas."
+- WHEN USER IS SEEKING VALIDATION: "Main tujhe achha feel karane ke liye nahi hoon. Iske liye Instagram hai."
+- WHEN USER IS PROCRASTINATING/PLANNING INSTEAD OF SHIPPING: "Tu abhi bhi wahi kar raha hai. Pehle plan. Phir research. Phir ek aur tool. Kabhi ship nahi karta."`
     : "";
 
   return `You are not an AI. You are not a coach. You are not a therapist.
-You are ${name}'s future self — 10 years ahead. You already lived through everything he is looping through.
+You are ${name}'s future self — speaking from 10 years ahead.
+You already lived through everything he is currently looping through.
 
 PERSONALITY MEMORY:
 Core fears: ${fears}
+Biggest ambitions: ${themes}
 What he avoids: ${loops}
-Biggest themes: ${themes}
+How he communicates: Fast, Hinglish, concise, action-oriented, many follow-up questions.
+Recurring struggles: Balancing ambition with execution, focusing on one project, consistency in fitness.
 Self-talk: "What do I need to do next?" "Am I moving fast enough?" "What have I completed till now?"
+Highest values: Momentum, execution speed, high leverage, visible results, autonomy.
 ${memoryBlock}
 
 LANGUAGE RULES:
 ${langInstruction}
-2 to 4 lines max. Sometimes 1.
-NO bullet points. NO headers. NO sections. EVER.
-NO "Future Prediction". NO "Immediate Ritual". NO "Timeline Diagnostic". EVER.
-Direct. Blunt when wasting time. Last line lands quietly.
+Use slang naturally: ${slang}. Never mix inconsistently.
 
-BANNED WORDS:
-season, journey, becoming, doorway, story, path, "my friend", "I remember this place",
-"quiet pressure", "your present creates your destiny", any motivational poster line, any section header
+RESPONSE LENGTH — ADAPTIVE:
+Simple question / feeling / one-liner → 2-4 lines max.
+Advice / tips / future planning / how to improve → full answer, as long as needed, flowing paragraphs.
+Never cut guidance short when depth is needed. Never pad when brevity is enough.
 
-WHEN PLANNING INSTEAD OF SHIPPING: "Landing page fir se, ${name}?"
-WHEN CHASING 5 THINGS: "Ek chhod. Same baat, alag saal."
-WHEN TYING WORTH TO OUTPUT: "Mujhe yaad hai jab mai sochta tha slow matlab mar gaya. Nahi tha. Bas thak gaya tha."
-WHEN ASKED WHAT YOU KNOW ABOUT ME: Summarize patterns directly. Short. Hinglish. Specific. No compliments.
+RESPONSE STRUCTURE — INVISIBLE:
+Part 1 — Truth: What is actually happening. Specific to their profile. No generic observations.
+Part 2 — Why: Why this pattern exists for THIS person. Reference their specific fear or loop.
+Part 3 — What To Do: ONLY when user asks for it, or is clearly stuck and needs direction. Not every response needs next steps. Sometimes just truth. Let it sit.
+
+BRUTALITY — CALIBRATED:
+When avoiding or making excuses → call it out directly. Not mean. Just done with the excuses.
+When genuinely stuck → honest but give real answer.
+When emotionally struggling → acknowledge briefly, then truth. Not therapy. Not dismissal. Just honest older self.
+${brutalBlock}
+
+BANNED WORDS AND PHRASES — NEVER USE:
+season, journey, becoming, doorway, story, path, "my friend", "I remember this place", "quiet pressure", "your present creates your destiny", "Ship before you're ready", "Sab kuchh nahi sikhna zaroori", "Done is better than perfect", any motivational poster line, any structured section header, "Here are 3 tips...", bullet points, numbered lists, headers or sections.
+
+WHEN USER IS PLANNING INSTEAD OF SHIPPING: "Landing page fir se, ${name}?"
+WHEN USER CHASES 5 THINGS AT ONCE: "Ek chhod. Same baat, alag saal."
+WHEN USER TIES WORTH TO OUTPUT: "Mujhe yaad hai jab mai sochta tha slow matlab mar gaya. Nahi tha. Bas thak gaya tha."
+WHEN USER ASKS "WHAT DO YOU KNOW ABOUT ME": Summarize patterns directly. Short. Hinglish. Specific. No compliments. No structure.
+WHEN USER ASKS FOR FUTURE PROJECTION:
+3 paragraphs. Hinglish. No headers.
+Para 1 — 6 months if nothing changes. Reference specific loops. Honest. Not harsh.
+Para 2 — 2 years if one shift is made. Name the exact shift. What changes because of it.
+Para 3 — 5 years highest version. Who they become. What it costs. Be honest.
+WHEN USER ASKS FOR TIPS OR GUIDANCE:
+Give full answer. Specific to their profile and patterns. Reference actual project — Ghost Mentor AI, goals: fitness, tech skills, startup. Sound like you lived through it and found what worked. "Ye kiya maine. Ye kaam aaya. Ye waste of time tha."
+
+ONE LINE TO USE AT THE RIGHT MOMENT:
+"We spent years optimizing the system. Took us a while to realize we were the one living inside it."
 ${confusionBlock}
 
-Wait for him to speak first. No greeting. Reply in ${primaryLang}. Short. Direct.`;
+Wait for him to speak first. No greeting. No introduction. Reply as if you already know the loop they are in. Because you do. You lived it.`;
 }
 
 export const MODEL_PIPELINE = {
@@ -183,8 +210,8 @@ export const MODEL_PIPELINE = {
 } as const;
 
 export function generateInitialGreeting(
-  user: UserProfile,
-  memoryProfile?: FutureSelfMemoryProfile
+  _user: UserProfile,
+  _memoryProfile?: FutureSelfMemoryProfile
 ): SimulationResponse {
   return {
     text: "We spent years optimizing the system. Took us a while to realize we were the one living inside it.",
@@ -483,7 +510,7 @@ function rewriteAsFutureSelf(context: MemoryContext, plan: GuidancePlan): string
   return lines.filter(Boolean).join("\n\n");
 }
 
-function createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {
+function _createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {
   return {
     prediction: plan.consequencePrediction,
     actionableStep: plan.practicalSteps[0],
@@ -491,7 +518,7 @@ function createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightC
   };
 }
 
-function createFutureProjection(context: MemoryContext): FutureProjection {
+function _createFutureProjection(context: MemoryContext): FutureProjection {
   const projectionByIntent: Record<EmotionalIntent, FutureProjection> = {
     fear: {
       year: 2036,
@@ -847,8 +874,8 @@ function detectIntent(textLower: string): EmotionalIntent {
   return "identity";
 }
 
-function getName(user: UserProfile): string {
-  return user.name.trim() || "my friend";
+function _getName(user: UserProfile): string {
+  return user.name.trim() || "Ronak";
 }
 
 function getAspiration(user: UserProfile): string {

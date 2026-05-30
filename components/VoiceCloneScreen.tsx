@@ -174,7 +174,7 @@ export default function VoiceCloneScreen({ onComplete }: VoiceCloneScreenProps) 
         transition={{ delay: 0.1 }}
         className="text-[14px] text-ghost-text-secondary font-light max-w-sm mb-10 leading-relaxed"
       >
-        What you're building. What scares you. Just talk.
+        What you&apos;re building. What scares you. Just talk.
       </motion.p>
 
       <div className="w-full max-w-sm h-16 mb-8 flex justify-center">

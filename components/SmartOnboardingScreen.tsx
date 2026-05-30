@@ -82,52 +82,12 @@ export default function SmartOnboardingScreen({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch first question on mount (after name is set)
-  useEffect(() => {
-    if (!nameSet) return;
-    fetchNextMessage([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nameSet]);
-
   // Scroll to bottom on new message
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [messages]);
-
-  const fetchNextMessage = useCallback(
-    async (history: ChatMsg[]) => {
-      setIsWaitingForAI(true);
-      try {
-        const res = await fetch("/api/onboard", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history }),
-        });
-        const data = await res.json();
-
-        if (data.text) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: data.text },
-          ]);
-        }
-
-        if (data.isComplete) {
-          // All 5 answers received — extract profile then transition
-          await runExtraction(history);
-        }
-
-        setTurnCount(data.turnCount ?? 0);
-      } catch (e) {
-        console.error("Onboard fetch failed:", e);
-      } finally {
-        setIsWaitingForAI(false);
-      }
-    },
-    []
-  );
 
   const runExtraction = useCallback(
     async (history: ChatMsg[]) => {
@@ -183,6 +143,48 @@ export default function SmartOnboardingScreen({
     },
     [state.user, dispatch, onComplete]
   );
+
+  const fetchNextMessage = useCallback(
+    async (history: ChatMsg[]) => {
+      setIsWaitingForAI(true);
+      try {
+        const res = await fetch("/api/onboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: history }),
+        });
+        const data = await res.json();
+
+        if (data.text) {
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: data.text },
+          ]);
+        }
+
+        if (data.isComplete) {
+          // All 5 answers received — extract profile then transition
+          await runExtraction(history);
+        }
+
+        setTurnCount(data.turnCount ?? 0);
+      } catch (e) {
+        console.error("Onboard fetch failed:", e);
+      } finally {
+        setIsWaitingForAI(false);
+      }
+    },
+    [runExtraction]
+  );
+
+  // Fetch first question on mount (after name is set)
+  useEffect(() => {
+    if (!nameSet) return;
+    const timer = setTimeout(() => {
+      fetchNextMessage([]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [nameSet, fetchNextMessage]);
 
   const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();

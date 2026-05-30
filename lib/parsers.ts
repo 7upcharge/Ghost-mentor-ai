@@ -148,7 +148,7 @@ export function parseGeminiJson(jsonStr: string): ParsedConversation {
 // Structure: { conversations: [{ id, messages: [{ role, content, timestamp }] }] }
 export function parseGrokJson(jsonStr: string): ParsedConversation {
   try {
-    let data = JSON.parse(jsonStr);
+    const data = JSON.parse(jsonStr);
     const convos = data.conversations || data.chats || (Array.isArray(data) ? data : []);
 
     let extractedText = "";
@@ -179,7 +179,7 @@ export function parseGrokJson(jsonStr: string): ParsedConversation {
 // Structure: { threads: [{ title, messages: [{ role, content }] }] }
 export function parsePerplexityJson(jsonStr: string): ParsedConversation {
   try {
-    let data = JSON.parse(jsonStr);
+    const data = JSON.parse(jsonStr);
     const threads = data.threads || data.conversations || (Array.isArray(data) ? data : []);
 
     let extractedText = "";

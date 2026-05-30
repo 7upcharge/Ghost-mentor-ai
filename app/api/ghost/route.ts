@@ -9,6 +9,11 @@ import {
 } from "@/lib/simulationEngine";
 import { supabase } from "@/lib/supabaseClient";
 
+interface GhostRequestMessage {
+  role: string;
+  text: string;
+}
+
 interface GhostRequest {
   user: UserProfile;
   message: string;
@@ -17,7 +22,7 @@ interface GhostRequest {
   languageProfile?: LanguageProfileState;
   /** Number of consecutive confusion messages the user has sent */
   confusionCount?: number;
-  messages?: any[];
+  messages?: GhostRequestMessage[];
 }
 
 interface ProviderTextResponse {
@@ -269,13 +274,52 @@ export async function POST(request: Request) {
 
   payload.languageProfile = currentLangProfile;
 
+  // ── Detect Brutal Honesty Mode Triggers ───────────────────────────────────
+  const brutalTriggers = [
+    /i'?ll\s+do\s+it\s+later/i,
+    /i\s+will\s+do\s+it\s+later/i,
+    /kal\s+karunga/i,
+    /kal\s+se/i,
+    /baad\s+mein/i,
+    /\bmaybe\b/i,
+    /\bshayad\b/i,
+    /sochta\s+hoon/i,
+    /i'?m\s+not\s+sure/i,
+    /pata\s+nahi/i,
+    /confused\s+hoon/i,
+    /i'?m\s+tired/i,
+    /thak\s+gaya/i,
+    /it'?s\s+complicated/i,
+    /mushkil\s+hai/i,
+    /tomorrow/i,
+    /^\s*(but|lekin|par)\b/i,
+  ];
+
+  let isRepeatingMsg = false;
+  if (payload.messages && payload.messages.length > 0) {
+    const userMsgs = payload.messages.filter((m) => m.role === "user");
+    const currentTextClean = payload.message.trim().toLowerCase().replace(/[?.!]/g, "");
+    if (currentTextClean.length > 3) {
+      const matchesCount = userMsgs.filter((m) => {
+        const textClean = (m.text || "").trim().toLowerCase().replace(/[?.!]/g, "");
+        return textClean === currentTextClean;
+      }).length;
+      if (matchesCount >= 1) {
+        isRepeatingMsg = true;
+      }
+    }
+  }
+
+  const isBrutalMode = brutalTriggers.some((pattern) => pattern.test(payload.message)) || isRepeatingMsg;
+
   // ── Build system prompt ───────────────────────────────────────────────────
   let systemPrompt = MODEL_PIPELINE.buildSystemPrompt(
     payload.user,
     payload.memoryProfile ?? fallback.updatedMemoryProfile,
     payload.languageProfile,
     chatSummary,
-    confusionLevel
+    confusionLevel,
+    isBrutalMode
   );
 
   const isDoubleConfusion = currentIsConfusion && (payload.confusionCount ?? 0) >= 1;
@@ -389,21 +433,21 @@ export async function POST(request: Request) {
   });
 }
 
-function cleanMessageHistory(messages: any[], currentMessage: string) {
+function cleanMessageHistory(messages: GhostRequestMessage[], currentMessage: string) {
   if (!messages || messages.length === 0) {
     return [{ role: "user", content: currentMessage }];
   }
 
   // 1. Map roles to user/assistant, drop empty text
   const mapped = messages
-    .map((m: any) => ({
+    .map((m) => ({
       role: m.role === "ghost" ? "assistant" as const : "user" as const,
       content: m.text ? m.text.trim() : "",
     }))
-    .filter((m: any) => m.content !== "");
+    .filter((m) => m.content !== "");
 
   // 2. Filter out leading assistant messages (some APIs prefer starting with user)
-  let firstUserIdx = mapped.findIndex((m: any) => m.role === "user");
+  const firstUserIdx = mapped.findIndex((m) => m.role === "user");
   if (firstUserIdx === -1) {
     return [{ role: "user", content: currentMessage }];
   }

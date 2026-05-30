@@ -447,10 +447,10 @@ export default function ChatScreen() {
         });
       }
 
-      if ((response as any).languageProfile) {
+      if (response.languageProfile) {
         dispatch({
           type: "SET_LANGUAGE_PROFILE",
-          languageProfile: (response as any).languageProfile,
+          languageProfile: response.languageProfile,
         });
       }
 
@@ -519,12 +519,6 @@ export default function ChatScreen() {
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
 
-  const handleReset = useCallback(() => {
-    goToScreen("landing");
-    dispatch({ type: "SET_SCREEN", screen: "landing" });
-    window.location.reload();
-  }, [goToScreen, dispatch]);
-
   const handleEndSession = useCallback(async () => {
     if (state.messages.length <= 1) {
       goToScreen("landing");
@@ -573,7 +567,6 @@ export default function ChatScreen() {
   }, [state.messages, state.user.id, goToScreen, dispatch]);
 
   const activeThinkingStep = thinkingStepIndex >= 0 ? thinkingSteps[thinkingStepIndex] : null;
-  const isOrbPulsing = state.isThinking || isTypingGhost;
 
   return (
     <div className="relative flex flex-col h-screen overflow-hidden bg-ghost-bg select-none">
