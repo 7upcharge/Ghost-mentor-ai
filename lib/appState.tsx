@@ -36,6 +36,7 @@ export interface UserProfile {
   aspiration: string;
   currentStruggle: string;
   voiceId?: string | null;
+  chatSummary?: string | null;
 }
 
 export interface FutureSelfMemoryProfile {
@@ -132,6 +133,7 @@ type Action =
   | { type: "SET_CONFIDENCE_SCORE"; score: number }
   | { type: "SET_FUTURE_PROJECTIONS"; projections: FutureProjection[] | null }
   | { type: "SET_MESSAGES"; messages: Message[] }
+  | { type: "SET_CHAT_SUMMARY"; chatSummary: string | null }
   | { type: "UPDATE_LAST_GHOST_MESSAGE"; text: string; insightCard?: InsightCard | null; futureProjection?: FutureProjection | null };
 
 // ═══════════════════════════════════════════
@@ -243,6 +245,8 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, user: { ...state.user, id: action.id } };
     case "SET_VOICE_ID":
       return { ...state, user: { ...state.user, voiceId: action.voiceId } };
+    case "SET_CHAT_SUMMARY":
+      return { ...state, user: { ...state.user, chatSummary: action.chatSummary } };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
     case "SET_MEMORY_PROFILE":

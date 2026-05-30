@@ -60,6 +60,9 @@ function AppScreens() {
           if (data.voice_id) {
             dispatch({ type: "SET_VOICE_ID", voiceId: data.voice_id });
           }
+          if (data.chat_summary) {
+            dispatch({ type: "SET_CHAT_SUMMARY", chatSummary: data.chat_summary });
+          }
 
           // Fetch chat history
           const { data: sessions } = await supabase

@@ -270,6 +270,7 @@ export default function ChatScreen() {
   const [endingStatusText, setEndingStatusText] = useState("");
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [confusionCount, setConfusionCount] = useState(0);
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -675,6 +676,30 @@ export default function ChatScreen() {
             </svg>
           </motion.button>
 
+          {/* Timeline Memory Drawer Toggle */}
+          <motion.button
+            onClick={() => setIsMemoryOpen(prev => !prev)}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="hidden md:flex items-center gap-1.5 text-[14px] font-medium tracking-wide px-4 py-2 rounded-full border text-ghost-text transition-all duration-200 cursor-pointer"
+            style={{ background: "rgba(255, 255, 255, 0.1)", borderColor: "rgba(255, 255, 255, 0.3)" }}
+          >
+            ✦ Memory
+          </motion.button>
+          <motion.button
+            onClick={() => setIsMemoryOpen(prev => !prev)}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border text-ghost-text transition-all duration-200 cursor-pointer"
+            style={{ background: "rgba(255, 255, 255, 0.1)", borderColor: "rgba(255, 255, 255, 0.3)" }}
+            title="Timeline Memory"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+          </motion.button>
+
           {/* Analyze */}
           <motion.button
             onClick={() => goToScreen("analyzer")}
@@ -974,6 +999,154 @@ export default function ChatScreen() {
               {endingStatusText}
             </motion.p>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Timeline Memory Drawer */}
+      <AnimatePresence>
+        {isMemoryOpen && (
+          <>
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMemoryOpen(false)}
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm pointer-events-auto"
+            />
+            {/* Sliding Panel */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[420px] bg-ghost-bg/95 border-l border-ghost-border/40 backdrop-blur-xl shadow-2xl p-6 sm:p-8 flex flex-col pointer-events-auto overflow-y-auto select-text"
+              style={{
+                background: "rgba(10, 10, 14, 0.95)",
+                boxShadow: "-10px 0 40px rgba(0,0,0,0.6)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-semibold tracking-[0.22em] uppercase text-ghost-accent-light">
+                    ✦ Timeline Memory
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsMemoryOpen(false)}
+                  className="text-ghost-muted hover:text-ghost-text transition-colors text-lg cursor-pointer p-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="flex-1 flex flex-col gap-6 select-text overflow-y-auto pr-1">
+                {/* Last Session Summary */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-[9px] tracking-[0.2em] uppercase text-ghost-muted font-bold font-heading">
+                    Last Session Summary
+                  </span>
+                  <p className="text-[13.5px] font-light text-ghost-text/90 leading-relaxed bg-white/[0.02] border border-white/[0.04] p-4 rounded-xl">
+                    {state.user.chatSummary || "No summary generated yet. Complete this session to trace your pattern."}
+                  </p>
+                </div>
+
+                <div className="h-px bg-white/5 my-2" />
+
+                {/* Personality Archetype */}
+                <div className="flex flex-col gap-4">
+                  <span className="text-[9px] tracking-[0.2em] uppercase text-ghost-muted font-bold font-heading">
+                    Personality Profile
+                  </span>
+                  
+                  <div className="grid grid-cols-1 gap-3.5">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-ghost-accent/65 block font-heading mb-0.5">Core Fear</span>
+                      <span className="text-[13px] font-light text-ghost-text-secondary">
+                        {state.memoryProfile?.identity?.coreFear || "not enough emotional history yet"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-ghost-accent/65 block font-heading mb-0.5">Decision Pattern</span>
+                      <span className="text-[13px] font-light text-ghost-text-secondary">
+                        {state.memoryProfile?.identity?.decisionPattern || "still being learned"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-ghost-accent/65 block font-heading mb-0.5">Emotional Style</span>
+                      <span className="text-[13px] font-light text-ghost-text-secondary">
+                        {state.memoryProfile?.identity?.emotionalStyle || "still being learned"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Behavioral Loops */}
+                {state.memoryProfile?.psychologicalContinuity?.behavioralLoops && state.memoryProfile.psychologicalContinuity.behavioralLoops.length > 0 && (
+                  <>
+                    <div className="h-px bg-white/5 my-2" />
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-ghost-muted font-bold font-heading">
+                        Behavioral Loops
+                      </span>
+                      <ul className="flex flex-col gap-2 pl-1">
+                        {state.memoryProfile.psychologicalContinuity.behavioralLoops.map((loop, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 text-[13px] font-light text-ghost-text-secondary leading-relaxed">
+                            <span className="text-ghost-accent/50 mt-1 select-none text-[8px] shrink-0">◆</span>
+                            <span>{loop}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                )}
+
+                {/* Growth Pathways */}
+                {state.memoryProfile?.psychologicalContinuity?.growthPatterns && state.memoryProfile.psychologicalContinuity.growthPatterns.length > 0 && (
+                  <>
+                    <div className="h-px bg-white/5 my-2" />
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-ghost-muted font-bold font-heading">
+                        Growth Patterns
+                      </span>
+                      <ul className="flex flex-col gap-2 pl-1">
+                        {state.memoryProfile.psychologicalContinuity.growthPatterns.map((pat, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 text-[13px] font-light text-ghost-text-secondary leading-relaxed">
+                            <span className="text-ghost-accent/50 mt-1 select-none text-[8px] shrink-0">◆</span>
+                            <span>{pat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                )}
+
+                {/* Recurring Themes */}
+                {state.memoryProfile?.psychologicalContinuity?.recurringThemes && state.memoryProfile.psychologicalContinuity.recurringThemes.length > 0 && (
+                  <>
+                    <div className="h-px bg-white/5 my-2" />
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-ghost-muted font-bold font-heading">
+                        Recurring Themes
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {state.memoryProfile.psychologicalContinuity.recurringThemes.map((theme, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[10px] px-2.5 py-1 rounded-full font-light bg-white/[0.03] border border-white/[0.05] text-ghost-text-secondary"
+                          >
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
