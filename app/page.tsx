@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { useSession, signIn } from "next-auth/react";
 import { AppProvider, useApp } from "@/lib/appState";
 import LandingPage from "@/components/LandingPage";
 import MemoryTransferScreen from "@/components/MemoryTransferScreen";
@@ -10,9 +11,24 @@ import VoiceCloneScreen from "@/components/VoiceCloneScreen";
 import ChatScreen from "@/components/ChatScreen";
 import FutureProjectionScreen from "@/components/FutureProjectionScreen";
 import PatternAnalyzer from "@/components/PatternAnalyzer";
+import GhostOrb from "@/components/GhostOrb";
 
 function AppScreens() {
-  const { state, goToScreen } = useApp();
+  const { state, dispatch, goToScreen } = useApp();
+  const { data: session, status } = useSession();
+
+  // Sync user info from session to local AppState
+  useEffect(() => {
+    if (session?.user) {
+      const sessionUser = session.user as any;
+      if (sessionUser.id && state.user.id !== sessionUser.id) {
+        dispatch({ type: "SET_USER_ID", id: sessionUser.id });
+      }
+      if (session.user.name && state.user.name !== session.user.name) {
+        dispatch({ type: "SET_USER_NAME", name: session.user.name });
+      }
+    }
+  }, [session, state.user.id, state.user.name, dispatch]);
 
   const handleStart = useCallback(() => goToScreen("memory-transfer"), [goToScreen]);
   const handleTransferComplete = useCallback(() => goToScreen("voice-clone"), [goToScreen]);
@@ -24,6 +40,33 @@ function AppScreens() {
     window.location.reload();
   }, [goToScreen]);
 
+  if (status === "loading") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-ghost-bg min-h-screen">
+        <GhostOrb size="md" isThinking />
+      </div>
+    );
+  }
+
+  // If not authenticated, we only render the LandingPage with a login trigger
+  if (!session) {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="landing"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.5 }}
+          className="flex-1"
+        >
+          <LandingPage onStart={() => signIn("google")} />
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  // Once authenticated, we manage standard screen states
   return (
     <AnimatePresence mode="wait">
       {state.screen === "landing" && (

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   -- Projection data
   future_projections  JSONB,
 
+  last_active TIMESTAMPTZ,
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );

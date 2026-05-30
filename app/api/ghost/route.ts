@@ -6,7 +6,7 @@ import {
   isConfusionMessage,
   getConfusionLevel,
 } from "@/lib/simulationEngine";
-import { supabase } from "@/lib/supabaseClient";
+import { getSessionMemory } from "@/lib/getSessionMemory";
 
 interface GhostRequestMessage {
   role: string;
@@ -22,6 +22,7 @@ interface GhostRequest {
   /** Number of consecutive confusion messages the user has sent */
   confusionCount?: number;
   messages?: GhostRequestMessage[];
+  userId?: string;
 }
 
 interface ProviderTextResponse {
@@ -231,22 +232,10 @@ export async function POST(request: Request) {
 
   // ── Fetch last session summary from Supabase ──────────────────────────────
   let chatSummary = "";
-  if (
-    payload.user.id &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
+  const activeUserId = body.userId || payload.user?.id;
+  if (activeUserId) {
     try {
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("chat_summary, last_session_summary")
-        .eq("user_id", payload.user.id)
-        .single();
-      if (data?.chat_summary) {
-        chatSummary = data.chat_summary;
-      } else if (data?.last_session_summary) {
-        chatSummary = data.last_session_summary; // backward compat
-      }
+      chatSummary = (await getSessionMemory(activeUserId)) || "";
     } catch {
       // Supabase unavailable — continue without session memory
     }

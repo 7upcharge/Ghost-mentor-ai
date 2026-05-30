@@ -120,7 +120,7 @@ function buildSystemPrompt(
     : `Respond fully in Hinglish. Never mix languages unless user switches. Use slang naturally: ${slang}.`;
 
   const memoryBlock = chatSummary
-    ? `\nLAST SESSION MEMORY:\nLast time we talked about: ${chatSummary}\nReference it naturally only if relevant to current conversation.`
+    ? `\nLAST SESSION MEMORY:\n${chatSummary}\nReference this naturally if relevant to current conversation. Do not announce it. Just speak as if you remember.`
     : "";
 
   const confusionBlock = confusionLevel === 2

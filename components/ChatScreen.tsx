@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { signOut, useSession } from "next-auth/react";
 import { useApp, InsightCard, FutureProjection } from "@/lib/appState";
 import {
   generateInitialGreeting,
@@ -260,6 +261,7 @@ function FutureProjectionView({ projection }: { projection: FutureProjection }) 
 
 export default function ChatScreen() {
   const { state, dispatch, goToScreen } = useApp();
+  const { data: session } = useSession();
   const [inputText, setInputText] = useState("");
   const [isTypingGhost, setIsTypingGhost] = useState(false);
   const [thinkingStepIndex, setThinkingStepIndex] = useState(-1);
@@ -419,6 +421,7 @@ export default function ChatScreen() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            userId: (session?.user as any)?.id || state.user.id,
             user: state.user,
             message: cleanedText,
             historyCount: state.messages.length,
@@ -529,12 +532,14 @@ export default function ChatScreen() {
     setEndingStatusText("Synthesizing session memory...");
 
     try {
+      const activeUserId = (session?.user as any)?.id || state.user.id;
+
       // 1. Call Session Memory Summary API
       await fetch("/api/session-memory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: state.user.id,
+          userId: activeUserId,
           messages: state.messages,
         }),
       });
@@ -546,7 +551,7 @@ export default function ChatScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: state.user.id,
+          userId: activeUserId,
           userName: state.user.name,
           messages: state.messages,
         }),
@@ -565,7 +570,7 @@ export default function ChatScreen() {
     } finally {
       setIsEndingSession(false);
     }
-  }, [state.messages, state.user.id, state.user.name, goToScreen, dispatch]);
+  }, [state.messages, state.user.id, state.user.name, goToScreen, dispatch, session]);
 
   const activeThinkingStep = thinkingStepIndex >= 0 ? thinkingSteps[thinkingStepIndex] : null;
 
@@ -622,6 +627,30 @@ export default function ChatScreen() {
             whileTap={{ scale: 0.98 }}
             className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 text-ghost-accent-light/95 transition-all duration-200 cursor-pointer"
             title="End Session"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </motion.button>
+
+          {/* Sign Out */}
+          <motion.button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="hidden md:flex text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/10 hover:bg-red-500/15 transition-all duration-200 cursor-pointer animate-fade-in"
+            style={{ color: "rgba(239, 68, 68, 0.95)" }}
+          >
+            Sign Out
+          </motion.button>
+          <motion.button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-red-500/20 bg-red-500/10 hover:bg-red-500/15 text-red-400 transition-all duration-200 cursor-pointer"
+            title="Sign Out"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

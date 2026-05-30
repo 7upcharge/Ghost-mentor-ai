@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
+import AuthProvider from "@/components/AuthProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -54,9 +55,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-ghost-bg text-ghost-text overflow-x-hidden" suppressHydrationWarning>
-        {/* Single, barely-visible ambient wash — no animation, no theatrics */}
-        <div className="ambient-layer" aria-hidden="true" />
-        <main className="relative z-10 flex-1 flex flex-col">{children}</main>
+        <AuthProvider>
+          {/* Single, barely-visible ambient wash — no animation, no theatrics */}
+          <div className="ambient-layer" aria-hidden="true" />
+          <main className="relative z-10 flex-1 flex flex-col">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );
