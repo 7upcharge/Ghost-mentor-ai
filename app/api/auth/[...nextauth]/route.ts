@@ -2,6 +2,9 @@ import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { createClient } from "@supabase/supabase-js"
 
+console.log("NEXTAUTH_URL:", process.env.NEXTAUTH_URL)
+console.log("NEXTAUTH_SECRET exists:", !!process.env.NEXTAUTH_SECRET)
+
 const handler = NextAuth({
   providers: [
     GoogleProvider({
