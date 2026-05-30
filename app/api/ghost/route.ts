@@ -5,7 +5,6 @@ import {
   MODEL_PIPELINE,
   isConfusionMessage,
   getConfusionLevel,
-  type SimulationResponse,
 } from "@/lib/simulationEngine";
 import { supabase } from "@/lib/supabaseClient";
 

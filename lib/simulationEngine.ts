@@ -210,9 +210,11 @@ export const MODEL_PIPELINE = {
 } as const;
 
 export function generateInitialGreeting(
-  _user: UserProfile,
-  _memoryProfile?: FutureSelfMemoryProfile
+  user: UserProfile,
+  memoryProfile?: FutureSelfMemoryProfile
 ): SimulationResponse {
+  void user;
+  void memoryProfile;
   return {
     text: "We spent years optimizing the system. Took us a while to realize we were the one living inside it.",
     thinkingSteps: THINKING_STEPS_POOL,
@@ -510,111 +512,7 @@ function rewriteAsFutureSelf(context: MemoryContext, plan: GuidancePlan): string
   return lines.filter(Boolean).join("\n\n");
 }
 
-function _createInsightCard(context: MemoryContext, plan: GuidancePlan): InsightCard {
-  return {
-    prediction: plan.consequencePrediction,
-    actionableStep: plan.practicalSteps[0],
-    emotionalTruth: `The pattern is not weakness. It is ${context.behavioralLoop}. Break it once, gently, today.`,
-  };
-}
 
-function _createFutureProjection(context: MemoryContext): FutureProjection {
-  const projectionByIntent: Record<EmotionalIntent, FutureProjection> = {
-    fear: {
-      year: 2036,
-      ifNothingChanges: [
-        "risk becomes something you admire from a distance",
-        "your best ideas stay protected and unused",
-        "confidence keeps waiting for evidence it never receives",
-      ],
-      ifYouActNow: [
-        "fear becomes a signal instead of a command",
-        "public attempts build durable self-respect",
-        `your path toward being ${context.aspiration} starts feeling real`,
-      ],
-    },
-    future: {
-      year: 2036,
-      ifNothingChanges: [
-        "planning replaces participation",
-        "uncertainty keeps renting space in every decision",
-        "time feels like pressure instead of material",
-      ],
-      ifYouActNow: [
-        "small visible steps rebuild trust",
-        "the future becomes less abstract and more earned",
-        "your next season has momentum instead of fog",
-      ],
-    },
-    choice: {
-      year: 2036,
-      ifNothingChanges: [
-        "the default path becomes your life by accident",
-        "self-trust weakens from underuse",
-        "resentment grows around the choice you avoided",
-      ],
-      ifYouActNow: [
-        "you learn which discomfort grows you",
-        "decisions become practice instead of punishment",
-        "your life starts reflecting your real appetite",
-      ],
-    },
-    connection: {
-      year: 2036,
-      ifNothingChanges: [
-        "privacy hardens into isolation",
-        "people know your performance, not your heart",
-        "the need for closeness gets buried under competence",
-      ],
-      ifYouActNow: [
-        "one honest conversation opens a warmer pattern",
-        "you become easier to love because you become easier to know",
-        "support stops feeling like a debt",
-      ],
-    },
-    creation: {
-      year: 2036,
-      ifNothingChanges: [
-        "potential stays beautiful because it stays untested",
-        "unfinished drafts collect emotional weight",
-        "the dream becomes safer than the work",
-      ],
-      ifYouActNow: [
-        "imperfect output becomes creative stamina",
-        "feedback turns into fuel instead of a verdict",
-        "the work finally has a life outside your head",
-      ],
-    },
-    peace: {
-      year: 2036,
-      ifNothingChanges: [
-        "achievement keeps asking for pieces of you",
-        "rest feels undeserved even when you are empty",
-        "joy becomes something postponed",
-      ],
-      ifYouActNow: [
-        "discipline starts including recovery",
-        "your ambition becomes calmer and more precise",
-        "you can actually inhabit the life you are building",
-      ],
-    },
-    identity: {
-      year: 2036,
-      ifNothingChanges: [
-        "a temporary wound becomes a permanent script",
-        "you keep collecting labels instead of evidence",
-        "change feels theoretical",
-      ],
-      ifYouActNow: [
-        "repeated behavior gives you a new self-image",
-        "the old story loses authority",
-        `you move closer to becoming ${context.aspiration}`,
-      ],
-    },
-  };
-
-  return projectionByIntent[context.intent];
-}
 
 function evolveFutureSelfMemoryProfile(
   context: MemoryContext,
@@ -872,10 +770,6 @@ function detectIntent(textLower: string): EmotionalIntent {
   }
 
   return "identity";
-}
-
-function _getName(user: UserProfile): string {
-  return user.name.trim() || "Ronak";
 }
 
 function getAspiration(user: UserProfile): string {

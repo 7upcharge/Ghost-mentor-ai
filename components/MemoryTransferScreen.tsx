@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
-import { useApp } from "@/lib/appState";
+import { useApp, TransferSource } from "@/lib/appState";
 import {
   parseAnyConversationJson,
   calculateConfidence,
@@ -436,7 +436,7 @@ export default function MemoryTransferScreen({
     dispatch({ type: "SET_LANGUAGE_PROFILE", languageProfile: langProfile });
     dispatch({
       type: "SET_TRANSFER_SOURCES",
-      transferSources: sources as typeof state.transferSources,
+      transferSources: sources as TransferSource[],
     });
     dispatch({ type: "SET_CONFIDENCE_SCORE", score: calculatedConfidence });
 

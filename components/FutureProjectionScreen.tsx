@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useApp } from "@/lib/appState";
 import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
@@ -43,7 +43,7 @@ function isNewProjections(data: unknown): data is NewProjections {
     "sixMonths" in data &&
     "twoYears" in data &&
     "fiveYears" in data &&
-    typeof (data as any).sixMonths === "string"
+    typeof (data as Record<string, unknown>).sixMonths === "string"
   );
 }
 
@@ -54,7 +54,7 @@ function isPrompt7(data: unknown): data is Prompt7Projections {
     "sixMonths" in data &&
     "twoYears" in data &&
     "fiveYears" in data &&
-    typeof (data as any).sixMonths === "object"
+    typeof (data as Record<string, unknown>).sixMonths === "object"
   );
 }
 

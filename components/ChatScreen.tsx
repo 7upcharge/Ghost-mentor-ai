@@ -373,7 +373,7 @@ export default function ChatScreen() {
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [thinkingStepIndex, thinkingSteps, state.user, dispatch, scrollToBottom]);
+  }, [thinkingStepIndex, thinkingSteps, state.user, dispatch, scrollToBottom, playGhostResponse]);
 
   useEffect(() => {
     scrollToBottom("smooth");
@@ -503,7 +503,7 @@ export default function ChatScreen() {
       }, 50); // 50ms per word ≈ 0.05s stagger
 
     },
-    [state.user, state.memoryProfile, state.messages.length, state.languageProfile, state.isThinking, isTypingGhost, confusionCount, dispatch, scrollToBottom]
+    [state.user, state.memoryProfile, state.messages, state.languageProfile, state.isThinking, isTypingGhost, confusionCount, dispatch, scrollToBottom]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
