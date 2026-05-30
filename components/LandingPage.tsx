@@ -215,7 +215,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={shouldReduceMotion ? { duration: 0.5 } : { duration: 2.0, ease: [0.16, 1, 0.3, 1] }}
           >
-            <GhostOrb size="hero" />
+            <GhostOrb size="hero" className="w-20 h-20 md:w-[120px] md:h-[120px]" />
           </motion.div>
         </div>
 
@@ -241,7 +241,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
               delay={900}
               onComplete={onHeadlineComplete}
               tag="h1"
-              className="text-display text-ghost-text"
+              className="text-display text-ghost-text text-[32px] md:text-[52px] leading-[1.05]"
               cursor
             />
           </div>
@@ -261,7 +261,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                   delay={80}
                   onComplete={undefined}
                   tag="p"
-                  className="text-[17px] sm:text-lg font-light leading-relaxed"
+                  className="text-[16px] md:text-[18px] font-light leading-relaxed"
                   style={{ color: "rgba(240,240,244,0.58)" } as React.CSSProperties}
                   cursor={false}
                 />
@@ -269,7 +269,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 1.7, duration: 1.2 }}
-                  className="text-[17px] sm:text-lg font-light leading-relaxed"
+                  className="text-[16px] md:text-[18px] font-light leading-relaxed"
                   style={{ color: "rgba(240,240,244,0.36)" }}
                   onAnimationComplete={onSubtitleComplete}
                 >
@@ -286,9 +286,9 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                 initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={shouldReduceMotion ? { duration: 0.35 } : { duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-start gap-4 animate-fade-in"
+                className="flex flex-col items-stretch md:items-start gap-4 animate-fade-in w-full md:w-auto"
               >
-                <GlowButton onClick={onStart} size="xl">
+                <GlowButton onClick={onStart} size="xl" className="w-full md:w-auto">
                   Begin
                   <svg
                     width="13"
@@ -310,7 +310,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5, duration: 1 }}
-                  className="text-xs"
+                  className="text-xs text-center md:text-left"
                   style={{ color: "rgba(255,255,255,0.16)" }}
                 >
                   No account needed · Takes 30 seconds
@@ -327,7 +327,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
               initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={shouldReduceMotion ? { duration: 0.5 } : { duration: 0.8, delay: 0.35, ease: "easeOut" }}
-              className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 w-full relative z-20"
+              className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 w-full relative z-20"
             >
               {[
                 {

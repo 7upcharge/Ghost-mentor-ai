@@ -604,43 +604,75 @@ export default function ChatScreen() {
         </motion.div>
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* End Session */}
           <motion.button
             onClick={handleEndSession}
             whileHover={{ opacity: 0.95, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 transition-all duration-200 cursor-pointer animate-fade-in"
+            className="hidden md:flex text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 transition-all duration-200 cursor-pointer animate-fade-in"
             style={{ color: "rgba(167,139,250,0.95)" }}
           >
             End Session
           </motion.button>
+          <motion.button
+            onClick={handleEndSession}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-ghost-accent-dim/30 bg-ghost-accent/10 hover:bg-ghost-accent/15 text-ghost-accent-light/95 transition-all duration-200 cursor-pointer"
+            title="End Session"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </motion.button>
 
+          {/* Analyze */}
           <motion.button
             onClick={() => goToScreen("analyzer")}
-            whileHover={{ opacity: 0.85, scale: 1.02 }}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border transition-all duration-200 cursor-pointer hidden sm:flex items-center gap-1.5"
-            style={{
-              color: "rgba(157,157,170,0.65)",
-              borderColor: "rgba(255,255,255,0.06)",
-              background: "rgba(255,255,255,0.02)",
-            }}
+            className="hidden md:flex items-center gap-1.5 text-[14px] font-medium tracking-wide px-4 py-2 rounded-full border border-white/30 bg-ghost-accent/15 hover:bg-ghost-accent/25 text-ghost-text transition-all duration-200 cursor-pointer"
           >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            🔍 Analyze
+          </motion.button>
+          <motion.button
+            onClick={() => goToScreen("analyzer")}
+            whileHover={{ opacity: 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-white/30 bg-ghost-accent/15 hover:bg-ghost-accent/25 text-ghost-text transition-all duration-200 cursor-pointer"
+            title="Analyze"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            Analyze
           </motion.button>
           
+          {/* New Reflection */}
           <motion.button
             onClick={() => !(state.isThinking || isTypingGhost) && handleSend("Project my future based on everything you know about me.")}
-            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.4 : 0.8 }}
-            className={`text-[10px] font-medium tracking-wider uppercase transition-colors duration-200 ${
-              (state.isThinking || isTypingGhost) ? "text-ghost-muted/40 cursor-not-allowed" : "text-ghost-muted hover:text-ghost-text-secondary cursor-pointer"
-            }`}
+            disabled={state.isThinking || isTypingGhost}
+            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.35 : 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="hidden md:flex text-[10px] font-medium tracking-wider uppercase px-3 py-1.5 rounded-lg border border-ghost-border bg-ghost-surface/40 text-ghost-muted hover:text-ghost-text-secondary transition-all duration-200 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
           >
             New Reflection
+          </motion.button>
+          <motion.button
+            onClick={() => !(state.isThinking || isTypingGhost) && handleSend("Project my future based on everything you know about me.")}
+            disabled={state.isThinking || isTypingGhost}
+            whileHover={{ opacity: (state.isThinking || isTypingGhost) ? 0.35 : 0.95, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex md:hidden items-center justify-center w-11 h-11 rounded-full border border-ghost-border bg-ghost-surface/40 text-ghost-muted hover:text-ghost-text-secondary transition-all duration-200 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+            title="New Reflection"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
           </motion.button>
         </div>
       </header>
@@ -649,6 +681,7 @@ export default function ChatScreen() {
       <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-2.5">
         <GhostOrb
           size="md"
+          className="w-[60px] h-[60px] md:w-[80px] md:h-[80px]"
           animate
           state={orbState !== "idle" ? orbState : (state.isThinking || isTypingGhost ? "thinking" : "idle")}
         />
@@ -679,7 +712,7 @@ export default function ChatScreen() {
       {/* Messages */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 sm:px-6 pt-56 pb-48 z-10 scroll-smooth relative"
+        className="flex-1 overflow-y-auto px-4 sm:px-6 pt-44 md:pt-56 pb-40 md:pb-48 z-10 scroll-smooth relative"
         style={{
           WebkitMaskImage:
             "linear-gradient(to bottom, transparent 0%, black 14%, black 84%, transparent 100%)",
@@ -709,7 +742,7 @@ export default function ChatScreen() {
                   {/* Message bubble */}
                   {isGhost ? (
                     <div
-                      className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[14.5px] max-w-[94%] sm:max-w-[84%] whitespace-pre-wrap select-text"
+                      className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[16px] md:text-[18px] max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
                       style={{
                         background: "rgba(15, 15, 22, 0.72)",
                         backdropFilter: "blur(16px)",
@@ -729,7 +762,7 @@ export default function ChatScreen() {
                     </div>
                   ) : (
                     <p
-                      className="text-[14px] font-light leading-relaxed text-right max-w-[88%] sm:max-w-[72%] whitespace-pre-wrap select-text"
+                      className="text-[16px] md:text-[18px] font-light leading-relaxed text-right max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
                       style={{ color: "rgba(157,157,170,0.85)" }}
                     >
                       {message.text}
@@ -738,14 +771,14 @@ export default function ChatScreen() {
 
                   {/* Insight card */}
                   {isGhost && !isTypingGhost && message.insightCard && (
-                    <div className="w-full max-w-[94%] sm:max-w-[84%]">
+                    <div className="w-full max-w-[90%] md:max-w-[70%]">
                       <InsightCardView card={message.insightCard} />
                     </div>
                   )}
 
                   {/* Future projection */}
                   {isGhost && !isTypingGhost && message.futureProjection && (
-                    <div className="w-full max-w-[94%] sm:max-w-[84%]">
+                    <div className="w-full max-w-[90%] md:max-w-[70%]">
                       <FutureProjectionView projection={message.futureProjection} />
                     </div>
                   )}
@@ -759,7 +792,7 @@ export default function ChatScreen() {
       </div>
 
       {/* Input Panel */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center px-4 py-6 pointer-events-none"
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center px-4 pt-6 pb-[calc(16px+env(safe-area-inset-bottom))] md:pb-6 pointer-events-none"
         style={{
           background: "linear-gradient(to top, rgba(7,7,10,0.98) 0%, rgba(7,7,10,0.92) 60%, transparent 100%)",
         }}
@@ -813,21 +846,21 @@ export default function ChatScreen() {
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
               placeholder="Share what is in your heart..."
-              className="flex-1 bg-transparent py-4 pl-5 pr-14 font-light text-[14px] sm:text-[15px] outline-none resize-none max-h-32 leading-relaxed"
+              className="flex-1 bg-transparent py-4 pl-5 pr-16 font-light text-[16px] outline-none resize-none max-h-32 leading-relaxed"
               style={{
                 color: "rgba(240,240,244,0.9)",
                 caretColor: "rgba(139,108,246,0.9)",
               }}
               disabled={state.isThinking || isTypingGhost}
             />
-            <div className="absolute right-3 bottom-2.5">
+            <div className="absolute right-2 bottom-2">
               <GlowButton
                 onClick={() => handleSend(inputText)}
                 disabled={!inputText.trim() || state.isThinking || isTypingGhost}
-                className="w-9 h-9 !p-0 rounded-xl"
+                className="w-11 h-11 !p-0 rounded-xl flex items-center justify-center"
                 size="default"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m22 2-7 20-4-9-9-4Z" />
                   <path d="M22 2 11 13" />
                 </svg>

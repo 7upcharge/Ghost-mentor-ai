@@ -219,10 +219,19 @@ export default function GhostOrb({
     ? "radial-gradient(ellipse, rgba(139,108,246,0.22) 0%, transparent 65%)"
     : "radial-gradient(ellipse, rgba(139,108,246,0.12) 0%, transparent 65%)";
 
+  // Check if custom dimensions are provided in className to bypass inline style overrides
+  const hasCustomWidth = className.split(" ").some(c => c.startsWith("w-") || c.includes(":w-") || c.startsWith("max-w-") || c.startsWith("min-w-"));
+  const hasCustomHeight = className.split(" ").some(c => c.startsWith("h-") || c.includes(":h-") || c.startsWith("max-h-") || c.startsWith("min-h-"));
+
+  const containerStyle = {
+    ...(!hasCustomWidth ? { width: px } : {}),
+    ...(!hasCustomHeight ? { height: px } : {}),
+  };
+
   return (
     <motion.div
       className={`relative flex items-center justify-center ${className}`}
-      style={{ width: px, height: px }}
+      style={containerStyle}
       animate={
         animate && !shouldReduceMotion
           ? {
@@ -253,8 +262,8 @@ export default function GhostOrb({
       <motion.div
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: px * 1.5,
-          height: px * 1.5,
+          width: "150%",
+          height: "150%",
           left: "50%",
           top: "50%",
           transform: "translate(-50%, -50%)",
@@ -272,8 +281,8 @@ export default function GhostOrb({
               key={i}
               className="absolute rounded-full pointer-events-none border"
               style={{
-                width: px * (1.2 + i * 0.25),
-                height: px * (1.2 + i * 0.25),
+                width: `${(1.2 + i * 0.25) * 100}%`,
+                height: `${(1.2 + i * 0.25) * 100}%`,
                 left: "50%",
                 top: "50%",
                 transform: "translate(-50%, -50%)",
@@ -296,8 +305,8 @@ export default function GhostOrb({
         <motion.div
           className="absolute rounded-full pointer-events-none border"
           style={{
-            width: px * 1.35,
-            height: px * 1.35,
+            width: "135%",
+            height: "135%",
             left: "50%",
             top: "50%",
             transform: "translate(-50%, -50%)",
@@ -310,10 +319,10 @@ export default function GhostOrb({
 
       {/* Ground shadow */}
       <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rounded-full blur-2xl"
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rounded-full blur-2xl font-normal"
         style={{
-          width: px * 0.65,
-          height: px * 0.16,
+          width: "65%",
+          height: "16%",
           background: isAmber
             ? "radial-gradient(ellipse, rgba(240,160,40,0.45) 0%, transparent 70%)"
             : "radial-gradient(ellipse, rgba(139,108,246,0.45) 0%, transparent 70%)",
@@ -323,7 +332,7 @@ export default function GhostOrb({
 
       <canvas
         ref={canvasRef}
-        style={{ width: px, height: px }}
+        style={{ width: "100%", height: "100%" }}
         className="relative z-10"
       />
     </motion.div>

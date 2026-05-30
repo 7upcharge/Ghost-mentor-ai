@@ -141,7 +141,7 @@ function CategoryPanel({
         className="h-px w-full"
         style={{ background: `linear-gradient(90deg, transparent, ${cfg.accent}, transparent)` }}
       />
-      <div className="p-5 sm:p-6">
+      <div className="p-3 md:p-6">
         {/* Header */}
         <div className="flex items-start gap-3 mb-4">
           <span
@@ -218,7 +218,7 @@ function CommunicationPanel({
           background: "linear-gradient(90deg, transparent, rgba(96,165,250,0.6), transparent)",
         }}
       />
-      <div className="p-5 sm:p-6">
+      <div className="p-3 md:p-6">
         <div className="flex items-start gap-3 mb-4">
           <span className="text-[11px] mt-0.5 select-none shrink-0" style={{ color: "rgba(96,165,250,0.8)" }}>
             ◫
@@ -324,13 +324,13 @@ function ResultsView({
       {/* Grid of panels */}
       <div className="flex flex-col gap-4">
         {/* Top 2-col: fears + ambitions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CategoryPanel categoryKey="coreFears" items={profile.coreFears} delay={0.05} />
           <CategoryPanel categoryKey="biggestAmbitions" items={profile.biggestAmbitions} delay={0.12} />
         </div>
 
         {/* Avoidance + recurring struggles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CategoryPanel categoryKey="avoidancePatterns" items={profile.avoidancePatterns} delay={0.18} />
           <CategoryPanel categoryKey="recurringStruggles" items={profile.recurringStruggles} delay={0.24} />
         </div>
@@ -339,7 +339,7 @@ function ResultsView({
         <CommunicationPanel data={profile.communicationStyle} delay={0.3} />
 
         {/* Self-talk + values */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CategoryPanel categoryKey="selfTalkPatterns" items={profile.selfTalkPatterns} delay={0.36} />
           <CategoryPanel categoryKey="unstatedValues" items={profile.unstatedValues} delay={0.42} />
         </div>
