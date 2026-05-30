@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useSession, signIn } from "next-auth/react";
-import { AppProvider, useApp } from "@/lib/appState";
+import { AppProvider, useApp, createEmptyFutureSelfMemoryProfile } from "@/lib/appState";
 import { supabase } from "@/lib/supabaseClient";
 import LandingPage from "@/components/LandingPage";
 import MemoryTransferScreen from "@/components/MemoryTransferScreen";
@@ -82,12 +82,45 @@ function AppScreens() {
           dispatch({ type: "SET_MESSAGES", messages: formattedMessages });
           goToScreen("chat");
         } else {
-          // New user - route straight to memory transfer
-          goToScreen("memory-transfer");
+          // New user - automatically register default profile details
+          const defaultProfile = createEmptyFutureSelfMemoryProfile();
+          const defaultLangProfile = {
+            dominantLanguage: "english" as const,
+            sentenceLength: "medium" as const,
+            formality: "casual" as const,
+            commonSlang: [],
+            frustrationStyle: "still being learned",
+            excitementStyle: "still being learned",
+          };
+
+          await supabase.from("user_profiles").upsert(
+            {
+              user_id: sessionUser.id,
+              name: session.user?.name || "Ghost User",
+              personality_profile: defaultProfile,
+              language_profile: defaultLangProfile,
+              confidence_score: 0,
+              transfer_sources: [],
+              last_active: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+
+          dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: defaultProfile });
+          dispatch({ type: "SET_LANGUAGE_PROFILE", languageProfile: defaultLangProfile });
+          dispatch({ type: "SET_USER_NAME", name: session.user?.name || "Ghost User" });
+          dispatch({ type: "SET_MESSAGES", messages: [] });
+          goToScreen("chat");
         }
       } catch (err) {
         console.error("Failed to query user profile:", err);
-        goToScreen("memory-transfer");
+        // Fallback: load default profile and go directly to chat so user is never stuck
+        const defaultProfile = createEmptyFutureSelfMemoryProfile();
+        dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: defaultProfile });
+        dispatch({ type: "SET_USER_NAME", name: session.user?.name || "Ghost User" });
+        dispatch({ type: "SET_MESSAGES", messages: [] });
+        goToScreen("chat");
       } finally {
         setProfileChecked(true);
         setCheckingProfile(false);
