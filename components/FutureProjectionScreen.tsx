@@ -6,6 +6,13 @@ import { useApp } from "@/lib/appState";
 import GhostOrb from "./GhostOrb";
 import GlowButton from "./GlowButton";
 
+// ── New Projections schema ──────────────────────────────────────────────────
+interface NewProjections {
+  sixMonths: string;
+  twoYears: string;
+  fiveYears: string;
+}
+
 // ── Prompt 7 new schema ──────────────────────────────────────────────────────
 interface Prompt7Timeline {
   ifPatternsHold: string;
@@ -29,14 +36,31 @@ interface LegacyProjection {
   ifYouActNow: string[];
 }
 
+function isNewProjections(data: unknown): data is NewProjections {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "sixMonths" in data &&
+    "twoYears" in data &&
+    "fiveYears" in data &&
+    typeof (data as any).sixMonths === "string"
+  );
+}
+
 function isPrompt7(data: unknown): data is Prompt7Projections {
   return (
     typeof data === "object" &&
     data !== null &&
     "sixMonths" in data &&
     "twoYears" in data &&
-    "fiveYears" in data
+    "fiveYears" in data &&
+    typeof (data as any).sixMonths === "object"
   );
+}
+
+function cleanProjectionText(text: string): string {
+  if (!text) return "";
+  return text.replace(/^\s*\d+\s*(months|years|month|year)\s*:\s*/i, "").trim();
 }
 
 
@@ -102,6 +126,45 @@ export default function FutureProjectionScreen({ onComplete }: FutureProjectionS
   const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
 
   const rawProjections = state.futureProjections;
+
+  // ── New Projections handling ────────────────────────────────────────────
+  const isNew = isNewProjections(rawProjections);
+
+  const newColumns = [
+    { 
+      label: "6 Months Out", 
+      key: "sixMonths" as const,
+      theme: {
+        text: "text-red-400/90",
+        bgAccent: "linear-gradient(90deg, rgba(239,68,68,0.7) 0%, rgba(220,38,38,0.4) 100%)",
+        borderHover: "rgba(239,68,68,0.35)",
+        glow: "rgba(239,68,68,0.06)",
+        textAccent: "text-red-300"
+      }
+    },
+    { 
+      label: "2 Years Out", 
+      key: "twoYears" as const,
+      theme: {
+        text: "text-ghost-accent-light/90",
+        bgAccent: "linear-gradient(90deg, rgba(139,108,246,0.8) 0%, rgba(99,102,241,0.5) 100%)",
+        borderHover: "rgba(139,108,246,0.35)",
+        glow: "rgba(139,108,246,0.06)",
+        textAccent: "text-indigo-300"
+      }
+    },
+    { 
+      label: "5 Years Out", 
+      key: "fiveYears" as const,
+      theme: {
+        text: "text-cyan-400/90",
+        bgAccent: "linear-gradient(90deg, rgba(34,211,238,0.7) 0%, rgba(13,148,136,0.4) 100%)",
+        borderHover: "rgba(34,211,238,0.35)",
+        glow: "rgba(34,211,238,0.06)",
+        textAccent: "text-cyan-300"
+      }
+    },
+  ];
 
   // ── Prompt 7 schema handling ────────────────────────────────────────────
   const isP7 = isPrompt7(rawProjections);
@@ -222,8 +285,71 @@ export default function FutureProjectionScreen({ onComplete }: FutureProjectionS
           </p>
         </motion.div>
 
-        {/* ── Prompt 7 schema — rich 6-key cards ─────────────────────────── */}
-        {isP7 && rawProjections ? (
+        {/* ── New simple string projections ─────────────────────────────── */}
+        {isNew && rawProjections ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-12">
+            {newColumns.map(({ label, key, theme }, idx) => {
+              const textContent = (rawProjections as NewProjections)[key];
+              const cleanedText = cleanProjectionText(textContent);
+              const isHovered = hoveredColumn === idx;
+              const isAnyHovered = hoveredColumn !== null;
+
+              return (
+                <motion.div
+                  key={key}
+                  initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
+                  animate={{
+                    opacity: isAnyHovered && !isHovered ? 0.35 : 1,
+                    scale: !shouldReduceMotion && isHovered ? 1.015 : 1,
+                    y: 0,
+                  }}
+                  transition={springTransition}
+                  onMouseEnter={() => setHoveredColumn(idx)}
+                  onMouseLeave={() => setHoveredColumn(null)}
+                  className="rounded-2xl relative overflow-hidden flex flex-col min-h-[220px]"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(12,12,18,0.88) 0%, rgba(8,8,12,0.94) 100%)",
+                    border: isHovered
+                      ? `1px solid ${theme.borderHover}`
+                      : "1px solid rgba(255,255,255,0.055)",
+                    boxShadow: isHovered
+                      ? `0 20px 48px ${theme.glow}, 0 8px 24px rgba(0,0,0,0.4)`
+                      : "0 8px 24px rgba(0,0,0,0.3)",
+                    backdropFilter: "blur(20px)",
+                  }}
+                >
+                  {/* Header accent gradient */}
+                  <div
+                    className="h-[3px] w-full"
+                    style={{
+                      background: theme.bgAccent,
+                    }}
+                  />
+                  <div className="p-6 flex flex-col gap-5 flex-1 justify-between">
+                    <div>
+                      <span className={`text-[10px] tracking-[0.25em] uppercase font-bold font-heading ${theme.text}`}>
+                        {label}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 flex items-center py-2">
+                      <p className="text-[14px] md:text-[15.5px] font-sans font-light leading-relaxed text-ghost-text/90">
+                        {cleanedText}
+                      </p>
+                    </div>
+
+                    <div className="h-px bg-white/5" />
+                    
+                    <div className="flex justify-between items-center text-[10px] tracking-wide text-ghost-muted/50 font-heading">
+                      <span>FUTURE SELF</span>
+                      <span className={theme.textAccent}>• HARSH TRUTH</span>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : isP7 && rawProjections ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-12">
             {p7Columns.map(({ label, key }, idx) => {
               const timeline = (rawProjections as Prompt7Projections)[key];

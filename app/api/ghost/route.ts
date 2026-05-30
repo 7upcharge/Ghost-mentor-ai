@@ -134,30 +134,34 @@ Ye sab pata hai kyunki mai tu tha. Bas 10 saal aage.`;
   return lines.slice(0, 5).join("\n");
 }
 
-async function callFutureProjectionConversational(profile?: FutureSelfMemoryProfile): Promise<string> {
+async function callFutureProjectionConversational(profile?: FutureSelfMemoryProfile, userName: string = "Ronak"): Promise<string> {
   const apiKey = process.env.OPENROUTER_KEY;
   if (!apiKey) throw new Error("No OpenRouter key configured.");
 
   const prompt = `Based on this personality profile: ${JSON.stringify(profile)}
 
-Speak as the user's future self.
-Project their future in 3 short paragraphs. Hinglish.
+Project this person's future in 6 months, 2 years, and 5 years.
 
-Paragraph 1 — 6 months if nothing changes:
-Reference their specific loops. Honest. Not harsh.
-
-Paragraph 2 — 2 years if one shift is made:
-Name the exact shift. What changes because of it.
-
-Paragraph 3 — 5 years highest version:
-Who they become. What it costs. Be honest not motivational.
-
-Rules:
+RULES:
+- 2 lines per projection
+- No abstract words: season, journey, doing, becoming, transformed, illusion
+- No motivation
+- Reference specific behaviors
+- Honest. Sometimes harsh.
 - Hinglish only
-- 3-4 sentences per paragraph max
-- No bullet points. No headers.
-- Reference specific patterns from profile
-- Sound like someone who watched this play out already`;
+- Plain text response with no markdown headers or bullets. Use the exact formatting below:
+
+FORMAT:
+6 months: [specific behavior] + [outcome] + [quiet truth]
+2 years: [one shift] + [what changes] + [what he loses if he doesn't]
+5 years: [highest version] + [honest cost] + [quiet question]
+
+EXAMPLE OUTPUT:
+6 months: 3 projects start. 0 finish. Ghost Mentor optimize hota rahega, deploy nahi. Tu sochta hai 'this time different.' Nahi hai.
+
+2 years: Agar ek cheez pakad li — sirf ek — toh product ban sakta hai. Par 'ek' chunna padega. Tu chunna nahi jaanta.
+
+5 years: Woh version ka cost: relationships, health, belief ki fast = alive. Kuch log pahunche, sab ne khoya. Tu kya khona chahata hai?`;
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -171,7 +175,7 @@ Rules:
       messages: [
         {
           role: "system",
-          content: "You are Ghost Mentor, speaking to your present-self. You are raw, honest, and speak from ten years ahead.",
+          content: `You are ${userName}'s future self. You already lived through these patterns: Starts projects/doesn't finish, plans forever/ships never, stuck in optimization.`,
         },
         { role: "user", content: prompt },
       ],
@@ -368,7 +372,10 @@ export async function POST(request: Request) {
 
   if (isFutureProjectionTrigger) {
     try {
-      const text = await callFutureProjectionConversational(payload.memoryProfile || fallback.updatedMemoryProfile);
+      const text = await callFutureProjectionConversational(
+        payload.memoryProfile || fallback.updatedMemoryProfile,
+        payload.user.name || "Ronak"
+      );
       console.log("MODEL RESPONSE (Intercepted - Future Projection):", text);
       return NextResponse.json({
         ...fallback,

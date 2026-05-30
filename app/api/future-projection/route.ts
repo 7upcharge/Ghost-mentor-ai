@@ -3,45 +3,42 @@ import { supabase } from "@/lib/supabaseClient";
 
 const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct";
 
-// ── Prompt 7 — Future Projection System Prompt (Structured JSON) ───────────────
-const STRUCTURED_SYSTEM_PROMPT = `
-You are a psychological timeline predictor for a future-self AI mentor.
-Analyze the chat log and generate a 3-stage future projection.
-Output ONLY raw JSON. No markdown. No explanations.
+// ── New Future Projection System Prompts ───────────────────────────────────────
+function buildStructuredSystemPrompt(name: string): string {
+  return `
+You are ${name}'s future self. You already lived through these patterns:
 
+- Starts projects, doesn't finish
+- Plans forever, ships never  
+- Ghost Mentor stuck in optimization
+- Gym: 1 week on, 2 weeks off
+- Smart but no proof of smart
+
+Project 6 months / 2 years / 5 years based on the conversation log.
+
+RULES:
+- 2 lines per projection
+- No abstract words: season, journey, doing, becoming, transformed, illusion
+- No motivation
+- Reference specific behaviors
+- Honest. Sometimes harsh.
+- Output ONLY raw JSON matching the format below. No markdown. No explanations.
+
+FORMAT:
 {
-  "sixMonths": {
-    "ifPatternsHold": "string — one specific consequence of continuing the current avoidance loop or fear, in 6 months",
-    "warning": "string — the subtle thing the user won't notice until it's too late, in 6 months",
-    "ifOneShiftMade": "string — what concretely changes if the user interrupts their main loop, in 6 months",
-    "whatThatShiftIs": "string — the ONE specific shift they need to make, described plainly",
-    "highestVersion": "string — who this person becomes at their highest potential in 6 months if they act now",
-    "whatItCosts": "string — what acting now will cost them (honesty about the price)"
-  },
-  "twoYears": {
-    "ifPatternsHold": "string — mid-term consequence of inaction",
-    "warning": "string — what silently calcifies if nothing changes in 2 years",
-    "ifOneShiftMade": "string — mid-term growth milestone if the shift is made",
-    "whatThatShiftIs": "string — the evolving form of that same core shift at 2 years",
-    "highestVersion": "string — who they become at highest potential in 2 years",
-    "whatItCosts": "string — what maintaining that shift requires at 2 years"
-  },
-  "fiveYears": {
-    "ifPatternsHold": "string — long-term regret or static outcome in 5 years",
-    "warning": "string — the moment they will look back at and realize was the turning point",
-    "ifOneShiftMade": "string — long-term actualization of their core aspirations in 5 years",
-    "whatThatShiftIs": "string — what the shift has become by 5 years",
-    "highestVersion": "string — full articulation of their highest-potential self in 5 years",
-    "whatItCosts": "string — what the 5-year journey costs"
-  }
+  "sixMonths": "6 months: [specific behavior] + [outcome] + [quiet truth]",
+  "twoYears": "2 years: [one shift] + [what changes] + [what he loses if he doesn't]",
+  "fiveYears": "5 years: [highest version] + [honest cost] + [quiet question]"
 }
 
-CRITICAL RULES:
-- All strings must be personalized to THIS user's specific fears, behaviors, and aspirations mentioned in the chat.
-- No generic statements. No corporate language. No buzzwords.
-- Emotionally resonant, punchy, and honest.
-- The final "highestVersion" in fiveYears should feel like a destination worth fighting for.
+EXAMPLE OUTPUT:
+{
+  "sixMonths": "6 months: 3 projects start. 0 finish. Ghost Mentor optimize hota rahega, deploy nahi. Tu sochta hai 'this time different.' Nahi hai.",
+  "twoYears": "2 years: Agar ek cheez pakad li — sirf ek — toh product ban sakta hai. Par 'ek' chunna padega. Tu chunna nahi jaanta.",
+  "fiveYears": "5 years: Woh version ka cost: relationships, health, belief ki fast = alive. Kuch log pahunche, sab ne khoya. Tu kya khona chahata hai?"
+}
 `.trim();
+}
 
 export async function POST(request: Request) {
   try {
@@ -59,19 +56,32 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Missing personalityProfile for conversational mode." }, { status: 400 });
       }
 
+      const userName = body.userName || "Ronak";
+
       const prompt = `Based on this personality profile: ${JSON.stringify(profile)}
 
-Project this person's future in 3 paragraphs.
-Paragraph 1: 6 months if current patterns continue. Honest. Specific to their loops.
-Paragraph 2: 2 years if they make ONE key shift. Name the exact shift.
-Paragraph 3: 5 years highest version. Include what it costs them to get there.
+Project this person's future in 6 months, 2 years, and 5 years.
 
-Rules:
-- Hinglish
-- No motivational language
-- Reference their specific patterns — not generic advice
-- Sound like someone who already watched this play out
-- 3-4 sentences per paragraph max`;
+RULES:
+- 2 lines per projection
+- No abstract words: season, journey, doing, becoming, transformed, illusion
+- No motivation
+- Reference specific behaviors
+- Honest. Sometimes harsh.
+- Hinglish only
+- Plain text response with no markdown headers or bullets. Use the exact formatting below:
+
+FORMAT:
+6 months: [specific behavior] + [outcome] + [quiet truth]
+2 years: [one shift] + [what changes] + [what he loses if he doesn't]
+5 years: [highest version] + [honest cost] + [quiet question]
+
+EXAMPLE OUTPUT:
+6 months: 3 projects start. 0 finish. Ghost Mentor optimize hota rahega, deploy nahi. Tu sochta hai 'this time different.' Nahi hai.
+
+2 years: Agar ek cheez pakad li — sirf ek — toh product ban sakta hai. Par 'ek' chunna padega. Tu chunna nahi jaanta.
+
+5 years: Woh version ka cost: relationships, health, belief ki fast = alive. Kuch log pahunche, sab ne khoya. Tu kya khona chahata hai?`;
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -86,7 +96,7 @@ Rules:
           messages: [
             {
               role: "system",
-              content: "You are Ghost Mentor, speaking to your present-self. You are raw, honest, and speak from ten years ahead.",
+              content: `You are ${userName}'s future self. You already lived through these patterns: Starts projects/doesn't finish, plans forever/ships never, stuck in optimization.`,
             },
             { role: "user", content: prompt },
           ],
@@ -110,10 +120,12 @@ Rules:
     }
 
     // ── Standard structured timeline mode ────────────────────────────────────
-    const { userId, messages } = body;
+    const { userId, userName, messages } = body;
     if (!userId || !messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Missing userId or messages array." }, { status: 400 });
     }
+
+    const name = userName || "Ronak";
 
     const chatLog = messages
       .map((m: { role: string; text: string }) => {
@@ -133,7 +145,7 @@ Rules:
       body: JSON.stringify({
         model: OPENROUTER_MODEL,
         messages: [
-          { role: "system", content: STRUCTURED_SYSTEM_PROMPT },
+          { role: "system", content: buildStructuredSystemPrompt(name) },
           { role: "user", content: chatLog },
         ],
         temperature: 0.3,

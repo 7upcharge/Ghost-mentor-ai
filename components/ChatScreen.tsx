@@ -547,6 +547,7 @@ export default function ChatScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: state.user.id,
+          userName: state.user.name,
           messages: state.messages,
         }),
       });
@@ -564,7 +565,7 @@ export default function ChatScreen() {
     } finally {
       setIsEndingSession(false);
     }
-  }, [state.messages, state.user.id, goToScreen, dispatch]);
+  }, [state.messages, state.user.id, state.user.name, goToScreen, dispatch]);
 
   const activeThinkingStep = thinkingStepIndex >= 0 ? thinkingSteps[thinkingStepIndex] : null;
 
