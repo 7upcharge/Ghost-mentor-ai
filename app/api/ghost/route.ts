@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import type { UserProfile, FutureSelfMemoryProfile, LanguageProfileState } from "@/lib/appState";
 import {
   generateGhostResponse,
@@ -334,6 +335,7 @@ export async function POST(request: Request) {
   if (isKnowMeTrigger) {
     const text = buildAboutMeResponse(payload.memoryProfile || fallback.updatedMemoryProfile);
     console.log("MODEL RESPONSE (Intercepted - Know Me):", text);
+    await saveChatSession(activeUserId, payload.message, text);
     return NextResponse.json({
       ...fallback,
       text,
@@ -365,6 +367,7 @@ export async function POST(request: Request) {
         payload.user.name || "Ronak"
       );
       console.log("MODEL RESPONSE (Intercepted - Future Projection):", text);
+      await saveChatSession(activeUserId, payload.message, text);
       return NextResponse.json({
         ...fallback,
         text,
@@ -386,6 +389,7 @@ export async function POST(request: Request) {
   try {
     const geminiResult = await callOpenRouterPrimary(payload, systemPrompt);
     console.log("MODEL RESPONSE (Gemini Primary via OpenRouter):", geminiResult.text);
+    await saveChatSession(activeUserId, payload.message, geminiResult.text);
     return NextResponse.json({
       ...fallback,
       text: geminiResult.text,
@@ -403,6 +407,7 @@ export async function POST(request: Request) {
   try {
     const deepseekResult = await callOpenRouterDeepSeek(payload, systemPrompt);
     console.log("MODEL RESPONSE (OpenRouter):", deepseekResult.text);
+    await saveChatSession(activeUserId, payload.message, deepseekResult.text);
     return NextResponse.json({
       ...fallback,
       text: deepseekResult.text,
@@ -418,6 +423,7 @@ export async function POST(request: Request) {
 
   // ── Last resort: local static template ───────────────────────────────────
   console.log("MODEL RESPONSE (Local Fallback):", fallback.text);
+  await saveChatSession(activeUserId, payload.message, fallback.text);
   return NextResponse.json({
     ...fallback,
     insightCard: null,
@@ -557,4 +563,24 @@ async function callOpenRouterDeepSeek(
   }
 
   return { text: text.trim(), provider: "openrouter-deepseek" };
+}
+
+async function saveChatSession(userId: string | undefined, userMessage: string, aiResponse: string) {
+  if (!userId) return;
+  try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!
+    );
+    await supabase.from("chat_sessions").insert({
+      user_id: userId,
+      messages: [
+        { role: "user", content: userMessage, timestamp: new Date().toISOString() },
+        { role: "assistant", content: aiResponse, timestamp: new Date().toISOString() }
+      ],
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error("Failed to save chat session to Supabase:", e);
+  }
 }

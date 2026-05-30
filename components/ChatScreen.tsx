@@ -757,64 +757,75 @@ export default function ChatScreen() {
             {state.messages.map((message, i) => {
               const isGhost = message.role === "ghost";
               const isLastMessage = i === state.messages.length - 1;
+              const showDivider = !message.isHistorical && state.messages[i - 1]?.isHistorical;
 
               return (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 14, filter: "blur(3px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                  className={`flex flex-col ${isGhost ? "items-start" : "items-end"} w-full`}
-                >
-                  {/* Sender label */}
-                  <span className="text-[8.5px] tracking-[0.25em] uppercase text-ghost-muted/55 mb-2.5 font-semibold font-heading px-1">
-                    {isGhost ? "Future Self" : "Present Self"}
-                  </span>
-
-                  {/* Message bubble */}
-                  {isGhost ? (
-                    <div
-                      className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[16px] md:text-[18px] max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
-                      style={{
-                        background: "rgba(15, 15, 22, 0.72)",
-                        backdropFilter: "blur(16px)",
-                        WebkitBackdropFilter: "blur(16px)",
-                        border: "1px solid rgba(255,255,255,0.065)",
-                        padding: "16px 20px",
-                        boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
-                      }}
-                    >
-                      {message.text}
-                      {isGhost && isLastMessage && isTypingGhost && (
-                        <span
-                          className="inline-block w-[1.5px] h-[1em] align-middle ml-[3px] bg-ghost-accent translate-y-[-0.05em]"
-                          style={{ animation: "cursor-blink 1s step-end infinite" }}
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    <p
-                      className="text-[16px] md:text-[18px] font-light leading-relaxed text-right max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
-                      style={{ color: "rgba(157,157,170,0.85)" }}
-                    >
-                      {message.text}
-                    </p>
-                  )}
-
-                  {/* Insight card */}
-                  {isGhost && !isTypingGhost && message.insightCard && (
-                    <div className="w-full max-w-[90%] md:max-w-[70%]">
-                      <InsightCardView card={message.insightCard} />
+                <React.Fragment key={message.id}>
+                  {showDivider && (
+                    <div className="w-full flex items-center justify-center my-6 opacity-35 animate-fade-in">
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-ghost-text-secondary/25 to-transparent" />
+                      <span className="text-[9px] tracking-[0.25em] uppercase text-ghost-text-secondary px-4 font-light">
+                        Previous conversation
+                      </span>
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-ghost-text-secondary/25 to-transparent" />
                     </div>
                   )}
+                  <motion.div
+                    initial={{ opacity: 0, y: 14, filter: "blur(3px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                    className={`flex flex-col ${isGhost ? "items-start" : "items-end"} w-full`}
+                  >
+                    {/* Sender label */}
+                    <span className="text-[8.5px] tracking-[0.25em] uppercase text-ghost-muted/55 mb-2.5 font-semibold font-heading px-1">
+                      {isGhost ? "Future Self" : "Present Self"}
+                    </span>
 
-                  {/* Future projection */}
-                  {isGhost && !isTypingGhost && message.futureProjection && (
-                    <div className="w-full max-w-[90%] md:max-w-[70%]">
-                      <FutureProjectionView projection={message.futureProjection} />
-                    </div>
-                  )}
-                </motion.div>
+                    {/* Message bubble */}
+                    {isGhost ? (
+                      <div
+                        className="rounded-2xl rounded-tl-sm text-ghost-text leading-relaxed font-light text-[16px] md:text-[18px] max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
+                        style={{
+                          background: "rgba(15, 15, 22, 0.72)",
+                          backdropFilter: "blur(16px)",
+                          WebkitBackdropFilter: "blur(16px)",
+                          border: "1px solid rgba(255,255,255,0.065)",
+                          padding: "16px 20px",
+                          boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        {message.text}
+                        {isGhost && isLastMessage && isTypingGhost && (
+                          <span
+                            className="inline-block w-[1.5px] h-[1em] align-middle ml-[3px] bg-ghost-accent translate-y-[-0.05em]"
+                            style={{ animation: "cursor-blink 1s step-end infinite" }}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <p
+                        className="text-[16px] md:text-[18px] font-light leading-relaxed text-right max-w-[90%] md:max-w-[70%] whitespace-pre-wrap select-text font-sans"
+                        style={{ color: "rgba(157,157,170,0.85)" }}
+                      >
+                        {message.text}
+                      </p>
+                    )}
+
+                    {/* Insight card */}
+                    {isGhost && !isTypingGhost && message.insightCard && (
+                      <div className="w-full max-w-[90%] md:max-w-[70%]">
+                        <InsightCardView card={message.insightCard} />
+                      </div>
+                    )}
+
+                    {/* Future projection */}
+                    {isGhost && !isTypingGhost && message.futureProjection && (
+                      <div className="w-full max-w-[90%] md:max-w-[70%]">
+                        <FutureProjectionView projection={message.futureProjection} />
+                      </div>
+                    )}
+                  </motion.div>
+                </React.Fragment>
               );
             })}
           </AnimatePresence>

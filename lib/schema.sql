@@ -42,3 +42,28 @@ CREATE POLICY "Allow public read and write access"
   FOR ALL
   USING (true)
   WITH CHECK (true);
+
+-- =============================================
+-- Chat Sessions Table & Continuity
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     TEXT NOT NULL REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+  messages    JSONB DEFAULT '[]',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_created ON chat_sessions (created_at DESC);
+
+ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read and write access" ON chat_sessions;
+
+CREATE POLICY "Allow public read and write access"
+  ON chat_sessions
+  FOR ALL
+  USING (true)
+  WITH CHECK (true);
+

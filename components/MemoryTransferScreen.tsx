@@ -375,6 +375,7 @@ export default function MemoryTransferScreen({
                   language_profile: langProfile,
                   confidence_score: 85,
                   transfer_sources: [{ platform: "manual", messageCount: 0, uploaded: true }],
+                  last_active: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 },
                 { onConflict: "user_id" }
@@ -463,6 +464,30 @@ export default function MemoryTransferScreen({
           }
           if (data.userStruggle) {
             dispatch({ type: "SET_USER_STRUGGLE", struggle: data.userStruggle });
+          }
+
+          // Save profile directly to Supabase so it persists for returning sessions
+          if (
+            state.user.id &&
+            process.env.NEXT_PUBLIC_SUPABASE_URL &&
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          ) {
+            try {
+              await supabase.from("user_profiles").upsert(
+                {
+                  user_id: state.user.id,
+                  personality_profile: data,
+                  language_profile: langProfile,
+                  confidence_score: calculatedConfidence,
+                  transfer_sources: sources,
+                  last_active: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id" }
+              );
+            } catch (err) {
+              console.error("Failed to save profile to Supabase in handleProcess:", err);
+            }
           }
         }
       }

@@ -21,6 +21,7 @@ export interface Message {
   insightCard?: InsightCard | null;
   futureProjection?: FutureProjection | null;
   timestamp: number;
+  isHistorical?: boolean;
 }
 
 export interface InsightCard {
@@ -130,6 +131,7 @@ type Action =
   | { type: "SET_TRANSFER_SOURCES"; transferSources: TransferSource[] }
   | { type: "SET_CONFIDENCE_SCORE"; score: number }
   | { type: "SET_FUTURE_PROJECTIONS"; projections: FutureProjection[] | null }
+  | { type: "SET_MESSAGES"; messages: Message[] }
   | { type: "UPDATE_LAST_GHOST_MESSAGE"; text: string; insightCard?: InsightCard | null; futureProjection?: FutureProjection | null };
 
 // ═══════════════════════════════════════════
@@ -257,6 +259,8 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, confidenceScore: action.score };
     case "SET_FUTURE_PROJECTIONS":
       return { ...state, futureProjections: action.projections };
+    case "SET_MESSAGES":
+      return { ...state, messages: action.messages };
     case "UPDATE_LAST_GHOST_MESSAGE": {
       const msgs = [...state.messages];
       const lastGhostIdx = msgs.findLastIndex((m) => m.role === "ghost");
