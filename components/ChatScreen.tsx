@@ -763,16 +763,14 @@ export default function ChatScreen() {
                 <React.Fragment key={message.id}>
                   {showDivider && (
                     <div className="w-full flex items-center justify-center my-6 opacity-35 animate-fade-in">
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-ghost-text-secondary/25 to-transparent" />
-                      <span className="text-[9px] tracking-[0.25em] uppercase text-ghost-text-secondary px-4 font-light">
-                        Previous conversation
+                      <span className="text-[10px] tracking-[0.25em] text-ghost-text-secondary px-4 font-light">
+                        ── earlier ──
                       </span>
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-ghost-text-secondary/25 to-transparent" />
                     </div>
                   )}
                   <motion.div
                     initial={{ opacity: 0, y: 14, filter: "blur(3px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    animate={{ opacity: message.isHistorical ? 0.7 : 1, y: 0, filter: "blur(0px)" }}
                     transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                     className={`flex flex-col ${isGhost ? "items-start" : "items-end"} w-full`}
                   >

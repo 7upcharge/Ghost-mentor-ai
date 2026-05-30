@@ -7,6 +7,7 @@ import GlowButton from "./GlowButton";
 import { useApp } from "@/lib/appState";
 import { detectLanguageProfile } from "@/lib/languageDetector";
 import { chunkAndTruncateText } from "@/lib/parsers";
+import { supabase } from "@/lib/supabaseClient";
 
 /* ═══════════════════════════════════════════
    Types
@@ -132,6 +133,31 @@ export default function SmartOnboardingScreen({
             }
             if (profileData.userStruggle) {
               dispatch({ type: "SET_USER_STRUGGLE", struggle: profileData.userStruggle });
+            }
+
+            // Save profile details immediately to Supabase
+            if (
+              state.user.id &&
+              process.env.NEXT_PUBLIC_SUPABASE_URL &&
+              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+            ) {
+              try {
+                await supabase.from("user_profiles").upsert(
+                  {
+                    user_id: state.user.id,
+                    name: profileData.userName !== "unknown" ? profileData.userName : state.user.name,
+                    personality_profile: profileData,
+                    language_profile: langProfile,
+                    confidence_score: 45,
+                    transfer_sources: [{ platform: "onboarding", messageCount: 5, uploaded: true }],
+                    last_active: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: "user_id" }
+                );
+              } catch (err) {
+                console.error("Failed to save profile to Supabase in smart onboarding:", err);
+              }
             }
           }
         }

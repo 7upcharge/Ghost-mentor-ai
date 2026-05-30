@@ -42,17 +42,17 @@ function AppScreens() {
     const checkUser = async () => {
       setCheckingProfile(true);
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("user_profiles")
-          .select("*")
+          .select("personality_profile, chat_summary, name, voice_id, language_profile")
           .eq("user_id", sessionUser.id)
           .single();
 
         if (data?.personality_profile) {
           // Returning user - load profile
-          dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: data.personality_profile });
+          dispatch({ type: "SET_MEMORY_PROFILE", memoryProfile: data.personality_profile as any });
           if (data.language_profile) {
-            dispatch({ type: "SET_LANGUAGE_PROFILE", languageProfile: data.language_profile });
+            dispatch({ type: "SET_LANGUAGE_PROFILE", languageProfile: data.language_profile as any });
           }
           if (data.name) {
             dispatch({ type: "SET_USER_NAME", name: data.name });
@@ -62,24 +62,22 @@ function AppScreens() {
           }
 
           // Fetch chat history
-          const { data: chats } = await supabase
+          const { data: sessions } = await supabase
             .from("chat_sessions")
-            .select("*")
+            .select("messages, created_at")
             .eq("user_id", sessionUser.id)
-            .order("created_at", { ascending: false })
+            .order("created_at", { ascending: true })
             .limit(50);
 
-          const formattedMessages = (chats || [])
-            .reverse()
-            .flatMap((chat: any) => {
-              return (chat.messages || []).map((m: any, idx: number) => ({
-                id: `${chat.id}-${idx}`,
-                role: m.role === "assistant" ? "ghost" : "user",
-                text: m.content || m.text || "",
-                timestamp: new Date(chat.created_at).getTime(),
-                isHistorical: true
-              }));
-            });
+          const formattedMessages = (sessions || []).flatMap((sessionRow: any) => {
+            return (sessionRow.messages || []).map((m: any, idx: number) => ({
+              id: `${sessionRow.created_at}-${idx}-${Math.random()}`,
+              role: (m.role === "assistant" || m.role === "ghost") ? "ghost" : "user",
+              text: m.content || m.text || "",
+              timestamp: new Date(sessionRow.created_at).getTime(),
+              isHistorical: true
+            }));
+          });
 
           dispatch({ type: "SET_MESSAGES", messages: formattedMessages });
           goToScreen("chat");
@@ -89,6 +87,7 @@ function AppScreens() {
         }
       } catch (err) {
         console.error("Failed to query user profile:", err);
+        goToScreen("memory-transfer");
       } finally {
         setProfileChecked(true);
         setCheckingProfile(false);
@@ -110,8 +109,11 @@ function AppScreens() {
 
   if (status === "loading" || (session && !profileChecked)) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-ghost-bg min-h-screen">
-        <GhostOrb size="md" isThinking />
+      <div className="flex-1 flex flex-col items-center justify-center bg-ghost-bg min-h-screen gap-6">
+        <GhostOrb size="md" state="thinking" />
+        <span className="text-[11px] tracking-[0.25em] uppercase text-ghost-accent/75 font-semibold font-heading animate-pulse">
+          Remembering you...
+        </span>
       </div>
     );
   }
